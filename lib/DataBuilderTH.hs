@@ -24,63 +24,27 @@ instance Exception BuilderException
 type TypeName = String
 type FieldName = String
 type ConName = String
-data Metadata = Metadata { typeName::TypeName, conName::ConName, fieldName::Maybe FieldName} 
+data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName::Maybe FieldName} 
 
-gatherMetaData::Data a=>a->Metadata
-gatherMetaData a = let c = toConstr a in Metadata (dataTypeName $ dataTypeOf a) (show c) Nothing
+typeOnlyMD::TypeName->Metadata
+typeOnlyMD tn = Metadata tn Nothing Nothing
 
-type ConId = String
---data SumConstructor m f a = SumConstructor { dflt::Bool, builder::MFM m f a }
+--gatherMetaData::Data a=>a->Metadata
+--gatherMetaData a = let c = toConstr a in Metadata (dataTypeName (dataTypeOf a)) (Just $ show c) Nothing
 
+data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::Metadata, value::f a }
 
 class Buildable f where
-  -- inject and apply are exactly Applicative, inject=pure and apply=(<*>)
-  bInject::Metadata-> a -> f a
+  -- inject and apply are exactly Applicative, inject=pure and apply=(<*>). 
+  bInject::a -> f a
   bApply::f (a->b) -> f a -> f b
-  -- nothing and sum are *close* to MonadPlus, nothing = mzero and sum ~ foldl mplus nothing but we need to combine all at once
-  bNothing::f a
-  bSum::[f a]->f a
-  bMeta::f a -> Metadata
-  bIsNothing::f a -> Bool
+  bSum::[MDWrapped f a]->f a
 
-{-- An example
-
-data BuilderEx a = BuilderEx (Maybe MetaData) (IO (Maybe a)) 
-
-sumBEs::[BuilderEx a]->BuilderEx a
-sumBEs bes = case (length bes) of
-  0 -> PutStrLn "No constructors in sumBEs" >> return Nothing
-  1 -> head bes
-  _ -> do
-    let conName (BuilderEx (Metadata _ con _)) = con
-        toName be = conName be ++ if not bIsnothing be then "*" else ""
-        names = intercalate "," $ map toName bes
-        prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
-    putStr prompt
-    hFlush stdout
-    cid <- getLine
-    let mBe = find (\be->conName be == cid) bes
-      case mBe of
-        Nothing -> putStrLn (cid ++ " unrecognized constructor!") >> return Nothing
-        Just be -> be
-
-instance Buildable BuilderEx where
-  bInject md x = BuilderEx md (return (Just x))
-  bApply (BuilderEx mAB iomAB) (BuilderEx mA iomA) = Builder mAB iomB where
-    iomB = do
-      mf <- iomAB
-      ma <- iomA
-      return $ mf <*> ma
-  bNothing = BuilderEx Nothing Nothing
-  bSum = sumBEs
-  bMeta (BuilderEx md _) = md
-  bIsNothing (BuilderEx _ ma) = (ma == return Nothing) ??
-   
--}
-
---String is field name, if present, in enclosing data type.
+--Field name only present if enclosing type is a record
 class Builder f a where
-  buildM::Buildable f=>Maybe FieldName->Maybe a-> f a
+  buildM::Buildable f=>Metadata->Maybe a-> f a
+
+type ConId = String
 
 unsupported :: String -> Q a
 unsupported msg = fail ("Unsupported type: " ++ show msg)
@@ -98,6 +62,12 @@ getCons (TySynD _ _ (ConT n)) = lookupType n
 getCons (SigD _ (ConT n)) = lookupType n
 getCons x = unsupported ("type in getCons " ++ show x)
 
+typeNameE :: Type -> Q Exp
+typeNameE (ConT n) = return (sToE $ nameBase n)
+typeNameE (VarT n) = return (sToE $ nameBase n)
+typeNameE (TupleT n) = return (sToE $ show n ++ "-tuple")
+typeNameE x = unsupported ("type in typeName " ++ show x)
+
 lookupType :: Name -> Q [Con]
 lookupType n = do
   conInfo <- reify n
@@ -105,49 +75,50 @@ lookupType n = do
     TyConI dec -> getCons dec
     _          -> unsupported ("reify of " ++ show n ++ " returned other than TyConI.")
 
-deriveBuild::Name -> Q [Dec]
-deriveBuild name = do
-  [d|instance Buildable f=>Builder f $(conT name) where
-       buildM mFn Nothing  = $(handleNothingL name) mFn
-       buildM mFn (Just x) = $(handleJustL name) mFn x|]
+deriveBuild::Name -> Name ->Q [Dec]
+deriveBuild builderName typeName = do
+  [d|instance Builder $(conT builderName) $(conT typeName) where
+       buildM md Nothing  = $(handleNothingL typeName) md
+       buildM md (Just x) = $(handleJustL typeName) md x|]
 
 handleNothingL::Name->Q Exp
 handleNothingL n = do
-  mFnN <- newName "mFn"
-  let patsQ = [return $ VarP mFnN]
-      mFnE = VarE mFnN
-  lamE patsQ (handleNothing n mFnE)
+  mdN <- newName "md"
+  let patsQ = [return $ VarP mdN]
+      mdE = VarE mdN
+  lamE patsQ (handleNothing n mdE)
 
 handleNothing::Name->Exp->Q Exp
-handleNothing n mFnE = do
-  sumFE <- [e|\x -> bSum x|]
-  blankBuildersMap <- buildAllBlankBuilders n mFnE
+handleNothing n mdE = do
+  sumFE <- [e|bSum|]
+  blankBuildersMap <- buildAllBlankBuilders n mdE
+  -- [e|bSum|] `appE` (listE . snd . unzip . M.toList $ blankBuilderMap)
   let summedE = sumFE `AppE` (ListE . snd . unzip . M.toList $ blankBuildersMap)
   return $ summedE
 
 handleJustL::Name->Q Exp
 handleJustL n = do
-  mFnN <- newName "mFn"
+  mdN <- newName "md"
   aN <- newName "a"
-  let patsQ = return <$> [VarP mFnN, VarP aN]
-      mFnE = VarE mFnN        
+  let patsQ = return <$> [VarP mdN, VarP aN]
+      mdE = VarE mdN        
       aE = VarE aN
-  lamE patsQ (handleJust n mFnE aE) 
+  lamE patsQ (handleJust n mdE aE) 
 
 handleJust::Name->Exp->Exp->Q Exp
-handleJust n mFnE varAE = do
+handleJust n mdE varAE = do
   cons <- lookupType n
-  blankBuildersMap <- buildAllBlankBuilders n mFnE
-  let matchBuilder con = buildCaseMatch (nameBase n) mFnE con blankBuildersMap 
+  blankBuildersMap <- buildAllBlankBuilders n mdE
+  let matchBuilder con = buildCaseMatch (nameBase n) mdE con blankBuildersMap 
   matches <- mapM matchBuilder cons
   return $ CaseE varAE matches
 
 buildAllBlankBuilders::Name->Exp->Q (M.Map ConId Exp) 
-buildAllBlankBuilders n mFnE = do
+buildAllBlankBuilders n mdE = do
   cons <- lookupType n
   let first (x,_,_) = x
   cnames <- (fmap first) <$> (mapM conNameAndTypes cons)
-  bldrs <- mapM (buildBlankBuilder (nameBase n) mFnE) cons
+  bldrs <- mapM (buildBlankBuilder (nameBase n) mdE) cons
   let cids = map nameBase cnames
   return $ M.fromList (zip cids bldrs)
 
@@ -155,44 +126,56 @@ sToE::String->Exp
 sToE = LitE . StringL
 
 buildCaseMatch::TypeName->Exp->Con->M.Map ConId Exp->Q Match
-buildCaseMatch typeN mFnE c builderMap = do
+buildCaseMatch typeN mdE c builderMap = do
   nothingE <- [e|Nothing|]
   justE <- [e|Just|] 
   bldME <- [e|buildM|]
   applyE  <- [e|bApply|]
   injectE <- [e|bInject|]
-  sumFE <- [e|\x -> bSum x|]
-  (n,tl,mFN) <- conNameAndTypes c
+  sumFE <- [e|bSum|]
+  (n,tl,mFNs) <- conNameAndTypes c
   ns <- mapM (\(ConT x)->newName $ toLower <$> (nameBase x)) tl
+  tnEs <- mapM typeNameE tl
   metaCE <- [e|Metadata|]
-  let metaE = metaCE `AppE` (sToE typeN) `AppE` (sToE (nameBase n)) `AppE` mFnE 
+  toMetaCE <- [e|typeOnlyMD|]
+  fieldNameE <- [e|fieldName|]
+  mdWrappedE <- [e|MDWrapped True|]
+  let conMetaE = metaCE `AppE` (sToE typeN) `AppE` (justE `AppE` sToE (nameBase n)) `AppE` (fieldNameE `AppE` mdE) 
   let pats = VarP <$> ns
       vars = VarE <$> ns
-      bldrs = case mFN of 
-        Nothing -> map (\x->bldME `AppE` nothingE `AppE` (justE `AppE` x)) vars -- [Exp], of type MFM m f a
-        Just fNames -> map (\(fn,vE)->bldME `AppE` (justE `AppE` (sToE $ nameBase fn)) `AppE` (justE `AppE` vE)) (zip fNames vars)
-      conFE = injectE `AppE` metaE `AppE` (ConE n)
+      mdEs = case mFNs of
+        Nothing -> map (\tnE -> toMetaCE `AppE` tnE) tnEs
+        Just fnames -> map (\(tnE,fn) -> metaCE `AppE` tnE `AppE` nothingE `AppE` (justE `AppE` (sToE $ nameBase fn))) (zip tnEs fnames)
+      bldrs = map (\(mdE,vE)->bldME `AppE` mdE `AppE` (justE `AppE` vE)) (zip mdEs vars)
+      conFE = injectE `AppE` (ConE n)
       bldr = foldl (\e1 e2 -> applyE `AppE` e1 `AppE` e2) conFE bldrs
-      newMap = M.insert (nameBase n) bldr builderMap
+      mdwE = mdWrappedE `AppE` conMetaE `AppE` bldr
+      newMap = M.insert (nameBase n) mdwE builderMap
       summedE = sumFE `AppE` (ListE . snd . unzip . M.toList $ newMap)
   return $ Match (ConP n pats) (NormalB summedE) []
 
 buildBlankBuilder::TypeName->Exp->Con->Q Exp
-buildBlankBuilder typeN mFnE c = do
+buildBlankBuilder typeN mdE c = do
   nothingE <- [e|Nothing|]
   justE <- [e|Just|]
   bldME <- [e|buildM|]
   applyE  <- [e|bApply|]
   injectE <- [e|bInject|]
-  (n,tl,mFNs) <- conNameAndTypes c
-  let bldrs = case mFNs of
-        Nothing -> replicate (length tl) (bldME `AppE` nothingE `AppE` nothingE) -- [Exp], of type MFM m f a
-        Just fNames -> map (\n->bldME `AppE` (justE `AppE` (sToE $ nameBase n)) `AppE` nothingE) fNames
   metaCE <- [e|Metadata|]
-  let metaE = metaCE `AppE` (sToE typeN) `AppE` (sToE $ nameBase n) `AppE` mFnE 
-  let conFE = injectE `AppE` metaE `AppE` (ConE n)
-      foldBldrs = foldl (\e1 e2 -> applyE `AppE` e1 `AppE` e2) conFE bldrs 
-  return $ foldBldrs
+  toMetaCE <- [e|typeOnlyMD|]
+  fieldNameE <- [e|fieldName|]
+  mdWrappedE <- [e|MDWrapped False|]
+  (n,tl,mFNs) <- conNameAndTypes c
+  tnEs <- mapM typeNameE tl
+  -- create Metadata for field types
+  let mdEs = case mFNs of
+        Nothing -> map (\tnE -> toMetaCE `AppE` tnE) tnEs
+        Just fnames -> map (\(tnE,fn) -> metaCE `AppE` tnE `AppE` nothingE `AppE` (justE `AppE` (sToE $ nameBase fn))) (zip tnEs fnames)
+      bldrs = map (\mdE->bldME `AppE` mdE `AppE` nothingE) mdEs 
+  let conFE = injectE `AppE` (ConE n)
+      foldBldrs = foldl (\e1 e2 -> applyE `AppE` e1 `AppE` e2) conFE bldrs
+      conMetaE = metaCE `AppE` (sToE typeN) `AppE` (justE `AppE` (sToE $ nameBase n)) `AppE` (fieldNameE `AppE` mdE) 
+  return $ mdWrappedE `AppE` conMetaE `AppE` foldBldrs
 
 
 
