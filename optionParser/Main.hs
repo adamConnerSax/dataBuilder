@@ -16,15 +16,15 @@ import Options.Applicative
 data Mode = Verbose | Silent deriving (Show,Enum,Bounded)
 data Process = AProcess | BProcess deriving (Show,Enum,Bounded)
 data Commands = DoA {aFile::String} | DoB {bFile::String, bFlag::Bool} deriving (Show)
-data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show)
+--data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show)
+data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show)
 
-
-
-
-deriveBuilder ''Parser ''Commands
+--deriveBuilder ''Parser ''Commands
 deriveBuilder ''Parser ''Config
 
 main::IO ()
 main = (execParser $ info parser infoMod) >>= print where
-  parser = buildM (typeOnlyMD "ConfigSimple") (Nothing :: Maybe Config)
+--  parser = buildM (typeOnlyMD "Config") (Nothing :: Maybe Config)
+  parser = buildM (typeOnlyMD "Config") (Just $ configDefault)
+  configDefault = Config "Hello" Nothing (Just Verbose) AProcess
   infoMod = fullDesc <> progDesc "Sample use of DataBauilder to create a parser from a data type"
