@@ -1,10 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE NoMonomorphismRestriction #-} --just for demo.  Allows polymorphic result printer
+
 module Main where
 
 import DataBuilderTH

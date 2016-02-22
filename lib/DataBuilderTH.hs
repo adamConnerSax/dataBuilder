@@ -16,7 +16,7 @@ module DataBuilderTH
        , Buildable(..)
        , Builder(..)
        , deriveBuilder
-       )where
+       ) where
 
 import Language.Haskell.TH
 import qualified Data.Map as M
