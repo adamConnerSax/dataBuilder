@@ -23,7 +23,7 @@ deriveBuilder ''Parser ''Config
 
 main::IO ()
 main = (execParser $ info parser infoMod) >>= print where
---  parser = buildM (typeOnlyMD "Config") (Nothing :: Maybe Config)
-  parser = buildM (typeOnlyMD "Config") (Just $ configDefault)
+--  parser = buildM (typeOnlyMD "Config") (Nothing :: Maybe Config) -- no defaults
+  parser = buildM (typeOnlyMD "Config") (Just $ configDefault) -- supplies defaults for everything
   configDefault = Config "Hello" Nothing (Just Verbose) AProcess
   infoMod = fullDesc <> progDesc "Sample use of DataBauilder to create a parser from a data type"
