@@ -23,7 +23,7 @@ data TestNested = Nested Int String TestSum deriving (Show)
 
 newtype BuilderEx a = BuilderEx { bldr::IO (Maybe a) }
 
-instance Buildable  BuilderEx where
+instance Buildable BuilderEx where
   bInject x = BuilderEx $ return (Just x)
   bApply bAB bA = BuilderEx $ do
     mAB <- (bldr bAB)
@@ -31,15 +31,8 @@ instance Buildable  BuilderEx where
     return $ mAB <*> mA
   bSum = sumBEs
 
-mdwCN::MDWrapped f a -> Maybe ConName
-mdwCN x = conName (metadata x) 
 
-mdwHasConName::MDWrapped f a->Bool
-mdwHasConName mdw = maybe False (const True) (mdwCN mdw) -- Lens??
-
-buildersHaveConNames::[MDWrapped f a]->Bool
-buildersHaveConNames bes = null (filter (not . mdwHasConName) bes) 
-
+-- the only tricky part.  How to handle sum types?
 sumBEs::[MDWrapped BuilderEx a]->BuilderEx a
 sumBEs mws = case (length mws) of
   0 -> BuilderEx $ putStrLn "No constructors in sumBEs" >> return Nothing
@@ -61,7 +54,19 @@ sumBEs mws = case (length mws) of
           Just mdw -> bldr $ value mdw
 
 
--- You need base case builders.  How to build basic types
+mdwCN::MDWrapped f a -> Maybe ConName
+mdwCN x = conName (metadata x) 
+
+mdwHasConName::MDWrapped f a->Bool
+mdwHasConName mdw = maybe False (const True) (mdwCN mdw) -- Lens??
+
+buildersHaveConNames::[MDWrapped f a]->Bool
+buildersHaveConNames bes = null (filter (not . mdwHasConName) bes) 
+--
+
+
+-- You need base case builders in order to build at least primitive types
+-- In general you would also need to handle lists, maps or traversables in general
 simpleBuilder::(Show a, Read a)=>Metadata->Maybe a->BuilderEx a 
 simpleBuilder md Nothing = BuilderEx $ do
   let prompt = (maybe "" (\x->x++"::") (fieldName md)) ++ (typeName md) ++ ": " 
@@ -75,19 +80,20 @@ simpleBuilder md (Just a) = BuilderEx $ do
   hFlush stdout
   (readMaybe <$> getLine)
 
--- This is overlappable so that we can use the TH to derive this for things.  Otherwise this covers all things!
+-- This is overlappable so that we can use the TH to derive this for things.
+-- Otherwise this covers all things since the constraints don't restrict matching.
 instance {-# OVERLAPPABLE #-} (Show a, Read a)=>Builder BuilderEx a where
   buildM = simpleBuilder 
 
 
-g = maybe (putStrLn "built Nothing") (putStrLn . show) 
+deriveBuilder ''BuilderEx ''TestNull
+deriveBuilder ''BuilderEx ''TestOne
+deriveBuilder ''BuilderEx ''TestTwo
+deriveBuilder ''BuilderEx ''TestSum
+deriveBuilder ''BuilderEx ''TestRecord
+deriveBuilder ''BuilderEx ''TestNested
 
-deriveBuild ''BuilderEx ''TestNull
-deriveBuild ''BuilderEx ''TestOne
-deriveBuild ''BuilderEx ''TestTwo
-deriveBuild ''BuilderEx ''TestSum
-deriveBuild ''BuilderEx ''TestRecord
-deriveBuild ''BuilderEx ''TestNested
+g = maybe (putStrLn "built Nothing") (putStrLn . show) 
 
 
 main::IO ()
