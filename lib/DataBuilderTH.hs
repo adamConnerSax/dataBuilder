@@ -22,6 +22,7 @@ import Language.Haskell.TH
 import qualified Data.Map as M
 
 import Data.Char (toLower)
+import Data.Maybe (fromJust)
 
 type TypeName = String
 type FieldName = String
@@ -37,10 +38,17 @@ class Buildable f where
   -- inject and apply are exactly Applicative, inject=pure and apply=(<*>). 
   bInject::a -> f a
   bApply::f (a->b) -> f a -> f b
+  bFail::String->f a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f a]->f a
 
 class Builder f a where
   buildM::Buildable f=>Metadata->Maybe a-> f a
+
+internalSum::Buildable f=>[MDWrapped f a]->f a
+internalSum mdws = case (length mdws) of
+  0 -> bFail "Internal error in DataBuilder.  No Constructors in Sum!"
+  1 -> value (head mdws)
+  _ -> bSum mdws
 
 type ConId = ConName
 
@@ -61,11 +69,26 @@ getCons (TySynD _ _ (ConT n)) = lookupType n
 getCons (SigD _ (ConT n)) = lookupType n
 getCons x = unsupported ("type in getCons " ++ show x)
 
+typeShow :: Type -> Maybe String
+typeShow (ConT n) = Just $ toLower <$> nameBase n
+typeShow (VarT n) = Just $ toLower <$> nameBase n
+typeShow (TupleT n) = Just $ "tuple" ++ show n
+typeShow (AppT t1 t2) = do
+  ts1 <- typeShow t1
+  ts2 <- typeShow t2
+  return $ (toLower <$> ts1) ++ ts2
+typeShow _ = Nothing
+
 typeNameE :: Type -> Q Exp
+typeNameE x = maybe (unsupported ("type in typeName " ++ show x)) sToE' (typeShow x) 
+
+{-
 typeNameE (ConT n) = return (sToE $ nameBase n)
 typeNameE (VarT n) = return (sToE $ nameBase n)
 typeNameE (TupleT n) = return (sToE $ show n ++ "-tuple")
+typeNameE (AppT t1 t2) = return (sToE $ show n1 ++ " " ++ show n2)
 typeNameE x = unsupported ("type in typeName " ++ show x)
+-}
 
 lookupType :: Name -> Q [Con]
 lookupType n = do
@@ -91,7 +114,7 @@ handleNothing::Name->Exp->Q Exp
 handleNothing n mdE = do
   sumFE <- [e|bSum|]
   blankBuildersMap <- buildAllBlankBuilders n mdE
-  [e|bSum $(listE . snd . unzip . M.toList $ blankBuildersMap)|]
+  [e|internalSum $(listE . snd . unzip . M.toList $ blankBuildersMap)|]
 
 handleJustL::Name->Q Exp
 handleJustL n = do
@@ -147,15 +170,17 @@ buildBlankBuilder typeN mdE c = do
       bldr = foldl (\e1 e2 -> [e|bApply|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
   [e|MDWrapped False $conMetaE $bldr|]
 
+
+
 buildCaseMatch::TypeName->Exp->Con->M.Map ConId ExpQ->Q Match
 buildCaseMatch typeN mdE c builderMap = do
   (n,tl,conMetaE,conFE,mdEs) <- builderPre typeN mdE c
-  ns <- mapM (\(ConT x)->newName $ toLower <$> (nameBase x)) tl
+  ns <- mapM (\ty->newName $ fromJust (typeShow ty)) tl
   let bldrs = map (appE [e|\(md,v)-> buildM md (Just v)|]) (zipE mdEs (varE <$> ns))
       bldr = foldl (\e1 e2 -> [e|bApply|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
       mdwE = [e|MDWrapped True $conMetaE $bldr|]
       newMap = M.insert (nameBase n) mdwE builderMap
-      summedE = [e|bSum $(listE . snd . unzip . M.toList $ newMap)|]
+      summedE = [e|internalSum $(listE . snd . unzip . M.toList $ newMap)|]
   match (conP n (varP <$> ns)) (normalB summedE) []
 
 

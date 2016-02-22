@@ -28,6 +28,17 @@ executable dataBuilderDemo
                      , DataBuilder
   default-language:    Haskell2010
 
+
+executable dataBuilder-OptionParser
+  hs-source-dirs:      optionParser
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , template-haskell
+                     , DataBuilder
+                     , optparse-applicative
+  default-language:    Haskell2010
+  
 source-repository head
   type:     git
   location: https://github.com/adamConnerSax/dataBuilder

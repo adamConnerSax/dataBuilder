@@ -29,29 +29,26 @@ instance Buildable BuilderEx where
     mAB <- (bldr bAB)
     mA <-  (bldr bA)
     return $ mAB <*> mA
+  bFail msg = BuilderEx $ putStrLn msg >> return Nothing 
   bSum = sumBEs
 
 
 -- the only tricky part.  How to handle sum types?
 sumBEs::[MDWrapped BuilderEx a]->BuilderEx a
-sumBEs mws = case (length mws) of
-  0 -> BuilderEx $ putStrLn "No constructors in sumBEs" >> return Nothing
-  1 -> value (head mws)
-  _ -> BuilderEx $ 
-    case (buildersHaveConNames mws) of
-      False -> putStrLn "At least one constructor is missing metadata in sumBEs!" >> return Nothing
-      True -> do
-        let starDefault mdw = fromJust (mdwCN mdw) ++ if hasDefault mdw then "*" else ""
-            conNames = map starDefault mws
-            names = intercalate "," conNames
-            prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
-        putStr prompt
-        hFlush stdout
-        chosen <- getLine
-        let mMDW = find (\mdw -> chosen == (fromJust (mdwCN mdw))) mws
-        case mMDW of
-          Nothing -> putStrLn (chosen ++ " unrecognized constructor!") >> return Nothing
-          Just mdw -> bldr $ value mdw
+sumBEs mdws = case (buildersHaveConNames mdws) of
+  False -> bFail "At least one constructor is missing metadata in sumBEs!"
+  True -> BuilderEx $ do
+    let starDefault mdw = fromJust (mdwCN mdw) ++ if hasDefault mdw then "*" else ""
+        conNames = map starDefault mdws
+        names = intercalate "," conNames
+        prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
+    putStr prompt
+    hFlush stdout
+    chosen <- getLine
+    let mMDW = find (\mdw -> chosen == (fromJust (mdwCN mdw))) mdws
+    case mMDW of
+      Nothing -> bldr $ bFail (chosen ++ " unrecognized constructor!")
+      Just mdw -> bldr $ value mdw
 
 
 mdwCN::MDWrapped f a -> Maybe ConName
