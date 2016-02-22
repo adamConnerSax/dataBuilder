@@ -15,11 +15,14 @@ import Options.Applicative
 
 data Mode = Verbose | Silent deriving (Show,Enum,Bounded)
 data Process = AProcess | BProcess deriving (Show,Enum,Bounded)
-data Commands = DoA {aFile::String} | DoB {bFile::String, bFlag::Bool} deriving (Show)
---data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show)
 data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show)
 
+{- Also supports commands automatically if you derive the builder for a sum type
+--data Commands = DoA {aFile::String} | DoB {bFile::String, bFlag::Bool} deriving (Show)
+--data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show)
 --deriveBuilder ''Parser ''Commands
+-}
+
 deriveBuilder ''Parser ''Config
 
 main::IO ()
