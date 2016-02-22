@@ -1,44 +1,28 @@
 DataBuilder
 
-Prototype template haskell to monadically build a value of type a from an existing value of a (or Nothing::Maybe a) using a typeclass.  Provide base builders (for simple types, like Int, String, etc.), and a function to handle sum types, and the derived class will create a builder for a more complicated class.
+Prototype template haskell to monadically build a value of type a from an existing value of a (or Nothing::Maybe a) using a typeclass.  Provide base builders via class instances (for simple types, like Int, String, etc.), and a function to handle sum types, and the derived class will create a builder for types built of sums and products of types with builders.  Something like Aeson's FromJSON.
+
+For any given type, you may make your own builder (by writing your won instance of Builder f) if the template derived behavior is not appropriate.
 
 Types:
 
-given a base Monad m (IO in the example)
+```
+type TypeName = String
+type FieldName = String
+type ConName = String
+data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName::Maybe FieldName}
+
+data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::Metadata, value::f a } --Exposed so data is available for sum type handling and hand derived instances of Builder
+
+class Buildable f where
+  -- inject and apply are exactly Applicative, inject=pure and apply=(<*>). 
+  bInject::a -> f a
+  bApply::f (a->b) -> f a -> f b
+  bSum::[MDWrapped f a]->f a
+
+class Builder f a where
+  buildM::Buildable f=>Metadata->Maybe a-> f a
 
 ```
-
-type MFM m f a = m (f (Maybe a))
-
-class ApplicativeLike f where
-  alInject::a->f a
-  alApply::f (x->y) -> f x -> f y
-
-instance Applicative f=>ApplicativeLike f where
-  alInject = pure
-  alApply = (<*>)
-
-class FM m f where
-  injectMfM::a->MFM m f a
-  applyMfM:::MFM m f (x->y)->MFM m f x->MFM m f y
-  
-instance (Monad m, ApplicativeLike f)=>FM m f where
-  injectMfM x = return $ (alInject (Just x))
-  applyMfM mfmFxy mfmX = do
-    fmFXY <- mfmFxy
-    fmX <- mfmX
-    return $ alApply (alApply (alInject (<*>)) fmFXY) fmX
-
-type ConId = String
-data SumConstructor m f a = SumConstructor { dflt::Bool, builder::MFM m f a }
-
-class ConSummable m f where
-  sumF::[(ConId,SumConstructor m f a)] -> MFM m f a 
-
-class Builder m f a where
-  buildM::(Monad m,ApplicativeLike f,ConSummable m f)=>Maybe a->MFM m f a
-```
-
-In most cases "f" will be Identity and can be ignored.
 
 In the given--extremely contrived!--example, we build interactively via readMaybe and putStr/getLn. But it shows the complex builder being built up from the simpler ones.
