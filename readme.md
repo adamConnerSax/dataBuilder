@@ -25,4 +25,9 @@ class Builder f a where
 
 ```
 
-In the given--extremely contrived!--example, we build interactively via readMaybe and putStr/getLn. But it shows the complex builder being built up from the simpler ones.
+Two examples:
+
+1. In "optionParse", an optparse-applicative builder.  Pretty bare bones but it could be expanded.
+
+2. In "app", a contrived example; we build interactively via readMaybe and putStr/getLn. But it shows the complex builder being built up from the simpler ones and a non-trivial sum-type case.
+
