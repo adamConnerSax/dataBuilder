@@ -3,9 +3,10 @@
 
 module Main where
 
-import DataBuilderTH
-import Language.Haskell.TH
+import DataBuilder.TH
+import DataBuilder.Types (Builder(buildM))
 import OptPABuilder
+--import Language.Haskell.TH
 import Options.Applicative
  
 

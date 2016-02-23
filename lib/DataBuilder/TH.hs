@@ -4,7 +4,7 @@
 --{-# LANGUAGE FlexibleContexts #-}
 --{-# LANGUAGE FunctionalDependencies #-}
 
-module DataBuilderTH
+module DataBuilder.TH
        (
          deriveBuilder
        ) where
@@ -14,7 +14,7 @@ import qualified Data.Map as M
 
 import Data.Char (toLower)
 import Data.Maybe (fromJust)
-import DataBuilderTypes
+import DataBuilder.InternalTypes
 
 type ConId = ConName
 

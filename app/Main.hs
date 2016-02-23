@@ -6,8 +6,9 @@
 {-# LANGUAGE NoMonomorphismRestriction #-} --just for demo.  Allows polymorphic result printer
 module Main where
 
-import DataBuilderTH
-import Language.Haskell.TH
+import DataBuilder.Types
+import DataBuilder.TH
+--import Language.Haskell.TH
 import Data.List (intercalate,find)
 import Text.Read (readMaybe)
 import System.IO (hFlush,stdout)

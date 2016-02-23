@@ -10,7 +10,7 @@ module OptPABuilder
        , typeOnlyOPBMDH
        ) where
 
-import DataBuilderTH
+import DataBuilder.Types
 import Data.Maybe (fromJust)
 import Data.Char (toLower)
 import Options.Applicative
@@ -36,7 +36,7 @@ instance Buildable Parser OPBMDH where
 -- derive a command parser from a sum-type
 sumToCommand::[MDWrapped Parser OPBMDH a]->Parser a
 sumToCommand mdws =
-  let makeCommand mdw = command (fromJust $ mdwConName mdw) (info (DataBuilderTH.value mdw) mempty)
+  let makeCommand mdw = command (fromJust $ mdwConName mdw) (info (DataBuilder.Types.value mdw) mempty)
   in subparser $ mconcat (map makeCommand mdws)
 
 --shortAndLong::HasName f=>String->Mod f a
