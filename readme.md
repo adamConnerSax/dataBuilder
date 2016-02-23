@@ -2,7 +2,9 @@ DataBuilder
 
 Prototype template haskell to applicatively build a value of type a from an existing value of a (or Nothing::Maybe a) using a typeclass.  Provide base builders via class instances (for simple types, like Int, String, etc.), and a function to handle sum types, and the derived class will create a builder for types built of sums and products of types with builders.  Something like Aeson's FromJSON.
 
-For any given type, you may make your own builder (by writing your won instance of Builder f) if the template derived behavior is not appropriate.
+Extra, runtime specified, options may be passed to each builder by creating a type to wrap the type-level metadata and deriving HasMetadata.  See the optionParser example for more details.
+
+For any given type, you may make your own builder (by writing your own instance of Builder f) if the template derived behavior is not appropriate.
 
 Types:
 
