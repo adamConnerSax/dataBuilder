@@ -17,8 +17,9 @@ library
   hs-source-dirs:      lib
   exposed-modules:     DataBuilder.TH
                      , DataBuilder.Types
+                     , DataBuilder.Generics
   other-modules:      DataBuilder.InternalTypes
-  build-depends:       base >= 4.7 && < 5, template-haskell, containers
+  build-depends:       base >= 4.7 && < 5, template-haskell, generics-eot, containers
   default-language:    Haskell2010
 
 executable dataBuilderDemo

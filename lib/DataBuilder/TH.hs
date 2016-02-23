@@ -1,8 +1,4 @@
 {-# LANGUAGE TemplateHaskell #-}
---{-# LANGUAGE MultiParamTypeClasses #-}
---{-# LANGUAGE FlexibleInstances #-}
---{-# LANGUAGE FlexibleContexts #-}
---{-# LANGUAGE FunctionalDependencies #-}
 
 module DataBuilder.TH
        (
