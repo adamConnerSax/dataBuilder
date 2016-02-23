@@ -19,7 +19,7 @@ data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mo
 --deriveBuilder ''Parser ''Commands
 -}
 
-deriveBuilder ''Parser ''Config
+deriveBuilder ''Parser ''Metadata ''Config
 
 main::IO ()
 main = (execParser $ info parser infoMod) >>= print where
