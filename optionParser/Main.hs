@@ -19,11 +19,12 @@ data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mo
 --deriveBuilder ''Parser ''Commands
 -}
 
-deriveBuilder ''Parser ''Metadata ''Config
+deriveBuilder ''Parser ''OPBMDH ''Config
 
 main::IO ()
-main = (execParser $ info parser infoMod) >>= print where
---  parser = buildM (typeOnlyMD "Config") (Nothing :: Maybe Config) -- no defaults
-  parser = buildM (typeOnlyMD "Config") (Just $ configDefault) -- supplies defaults for everything
+main = (execParser $ info (helper <*> parser) infoMod) >>= print where
+  opbOptions = OPBOptions True
+--  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Just $ configDefault) -- supplies defaults for everything
   configDefault = Config "Hello" Nothing (Just Verbose) AProcess
-  infoMod = fullDesc <> progDesc "Sample use of DataBauilder to create a parser from a data type"
+  infoMod = fullDesc <> progDesc "Sample use of DataBuilder to create a parser from a data type"
+  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Nothing :: Maybe Config) -- no defaults
