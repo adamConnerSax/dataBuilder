@@ -4,7 +4,7 @@ Prototype template haskell to applicatively build a value of type a from an exis
 
 Extra, runtime specified, options may be passed to each builder by creating a type to wrap the type-level metadata and deriving HasMetadata.  See the optionParser example for more details.
 
-For any given type, you may make your own builder (by writing your own instance of Builder f) if the template derived behavior is not appropriate.
+For any given type, you may make your own builder (by writing your own instance of Builder f g a) if the template derived behavior is not appropriate.
 
 Types:
 
