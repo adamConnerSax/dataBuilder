@@ -3,8 +3,6 @@
 
 module Main where
 
-import DataBuilder.TH
-import DataBuilder.Types (Builder(buildM))
 import OptPABuilder
 import Options.Applicative
  

@@ -2,17 +2,21 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 module OptPABuilder
        (
          OPBOptions(..)
        , OPBMDH
        , typeOnlyOPBMDH
+       , buildM
+       , deriveBuilder
        ) where
 
 import DataBuilder.Types
 import Data.Maybe (fromJust)
 import Data.Char (toLower)
 import Options.Applicative
+import DataBuilder.TH (deriveBuilder)
 
 data OPBOptions = OPBOptions { showDefaults::Bool }
 data OPBMDH = OPBMDH { options::OPBOptions, metadata::Metadata }
@@ -62,7 +66,6 @@ instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser OPBMDH e
 
 instance {-# OVERLAPPABLE #-} Builder Parser OPBMDH a=>Builder Parser OPBMDH (Maybe a) where
   buildM opbmdh mmA = optional $ maybe (buildM opbmdh Nothing) (buildM opbmdh) mmA 
-
 
 
 
