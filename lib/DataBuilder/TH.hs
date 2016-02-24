@@ -22,6 +22,7 @@ conNameAndTypes (NormalC n ts) = return (n, snd <$> ts,Nothing)
 conNameAndTypes (RecC n vts) =
   let thrd (_,_,x) = x
       first (x,_,_) = x in return (n,thrd <$> vts, Just (first <$> vts))
+conNameAndTypes (InfixC (_,t) n (_,t')) = return (n, [t,t'], Nothing)
 --InfixC and ForallC.  We could extract name and types but not sure we'd know how to apply them??
 conNameAndTypes c = unsupported ("constructor type in conNameAndTypes (" ++ show c ++ ")")
 
