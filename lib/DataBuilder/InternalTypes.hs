@@ -18,11 +18,13 @@ module DataBuilder.InternalTypes
   , internalSum
   ) where
 
+import Data.Maybe (isJust)
+
 type TypeName = String
 type FieldName = String
 type ConName = String
 
-data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName::Maybe FieldName}
+data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName::Maybe FieldName} deriving (Show)
 
 typeOnlyMD::TypeName->Metadata
 typeOnlyMD tn = Metadata tn Nothing Nothing
@@ -45,10 +47,10 @@ mdwConName::HasMetadata g=>MDWrapped f g a -> Maybe ConName
 mdwConName x = conName (getMetadata x)
 
 mdwHasConName::HasMetadata g=>MDWrapped f g a->Bool
-mdwHasConName mdw = maybe False (const True) (mdwConName mdw)
+mdwHasConName mdw = isJust (mdwConName mdw)
 
 buildersAllHaveConNames::HasMetadata g=>[MDWrapped f g a]->Bool
-buildersAllHaveConNames bes = null (filter (not . mdwHasConName) bes)
+buildersAllHaveConNames bes = not (any (not . mdwHasConName) bes)
 
 
 class Buildable f g | f->g where
@@ -62,7 +64,8 @@ class Builder f g a where
   buildM::(HasMetadata g,Buildable f g)=>g->Maybe a-> f a
 
 internalSum::(HasMetadata g, Buildable f g)=>[MDWrapped f g a]->f a
-internalSum mdws = case (length mdws) of
+internalSum mdws = case length mdws of
   0 -> bFail "Internal error in DataBuilder.  No Constructors in Sum!"
   1 -> value (head mdws)
-  _ -> if (buildersAllHaveConNames mdws) then bSum mdws else bFail "Sum type for command encountered but constructor name(s) are missing."
+  _ -> if buildersAllHaveConNames mdws then bSum mdws else bFail "Sum type for command encountered but constructor name(s) are missing."
+
