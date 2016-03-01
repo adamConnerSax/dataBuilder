@@ -23,7 +23,11 @@ data TestNested = Nested Int String TestSum deriving (Show)
 
 newtype BuilderEx a = BuilderEx { bldr::IO (Maybe a) }
 
+instance Functor BuilderEx where
+  fmap f bea = BuilderEx $ (fmap f) <$> bldr bea
+
 instance Buildable BuilderEx Metadata where
+  bMap = fmap 
   bInject x = BuilderEx $ return (Just x)
   bApply bAB bA = BuilderEx $ do
     mAB <- (bldr bAB)

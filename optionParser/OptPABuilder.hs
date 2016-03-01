@@ -31,6 +31,7 @@ instance HasMetadata OPBMDH where
   setMetadata md' (OPBMDH op _) = OPBMDH op md' 
 
 instance Buildable Parser OPBMDH where
+  bMap = fmap 
   bInject = pure 
   bApply = (<*>)
   bFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty

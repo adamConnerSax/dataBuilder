@@ -2,7 +2,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
-
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE RankNTypes #-}
 module DataBuilder.InternalTypes
   (
     TypeName
@@ -52,8 +53,12 @@ mdwHasConName mdw = isJust (mdwConName mdw)
 buildersAllHaveConNames::HasMetadata g=>[MDWrapped f g a]->Bool
 buildersAllHaveConNames bes = not (any (not . mdwHasConName) bes)
 
-
+{- We don't get the Functor and applicative methods from those classes becuase we may want to use this
+ - in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic
+-}
 class Buildable f g | f->g where
+  -- here only so we can derive the functor instance of the wrapped version
+  bMap::(a->b) -> f a->f b
   -- inject and apply are exactly Applicative, inject=pure and apply=(<*>).
   bInject::a -> f a
   bApply::f (a->b) -> f a -> f b
@@ -69,3 +74,12 @@ internalSum mdws = case length mdws of
   1 -> value (head mdws)
   _ -> if buildersAllHaveConNames mdws then bSum mdws else bFail "Sum type for command encountered but constructor name(s) are missing."
 
+-- This is available to make clear that this structure is inherent in Buildable and so it can be used if necessary
+newtype FABuildable a = FABuildable { unFA::forall f g.Buildable f g=>f a }
+
+instance Functor FABuildable where
+  fmap f x = FABuildable $ (bMap f) (unFA x)
+
+instance Applicative FABuildable where
+  pure x = FABuildable $ bInject x
+  x <*> y = FABuildable $ (unFA x) `bApply` (unFA y)
