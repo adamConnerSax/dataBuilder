@@ -1,15 +1,25 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Main where
 
 import OptPABuilder
 import Options.Applicative
- 
+import DataBuilder.TH (deriveBuilder)
+import GHC.Generics
+import DataBuilder.Types (Builder)
+import DataBuilder.GenericSOP
+import qualified Generics.SOP as GSOP
+
 
 data Mode = Verbose | Silent deriving (Show,Enum,Bounded)
 data Process = AProcess | BProcess deriving (Show,Enum,Bounded)
-data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show)
+data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,Generic)
+
+instance GSOP.Generic Config
+instance GSOP.HasDatatypeInfo Config
+instance Builder Parser OPBMDH Config
 
 {- Also supports commands automatically if you derive the builder for a sum type
 --data Commands = DoA {aFile::String} | DoB {bFile::String, bFlag::Bool} deriving (Show)
@@ -17,7 +27,7 @@ data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mo
 --deriveBuilder ''Parser ''Commands
 -}
 
-deriveBuilder ''Parser ''OPBMDH ''Config
+--deriveBuilder ''Parser ''OPBMDH ''Config
 
 main::IO ()
 main = (execParser $ info (helper <*> parser) infoMod) >>= print where

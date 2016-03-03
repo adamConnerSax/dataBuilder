@@ -4,6 +4,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DefaultSignatures #-}
 module DataBuilder.InternalTypes
   (
     TypeName
@@ -19,9 +20,11 @@ module DataBuilder.InternalTypes
   , internalSum
   , wrapBuildable
   , FABuildable(unFA)
+  , GBuilder(..)
   ) where
 
 import Data.Maybe (isJust)
+import qualified Generics.SOP as GSOP
 
 type TypeName = String
 type FieldName = String
@@ -67,8 +70,13 @@ class Buildable f g | f->g where
   bFail::String->f a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f g a]->f a -- this only gets called if you have > 1 and all have constructor names in Metadata
 
+class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g a where
+  gBuildM::(HasMetadata g,Buildable f g)=>g->Maybe a-> f a
+
 class Builder f g a where
   buildM::(HasMetadata g,Buildable f g)=>g->Maybe a-> f a
+  default buildM::(HasMetadata g, Buildable f g, GBuilder f g a)=>g->Maybe a-> f a
+  buildM = gBuildM
 
 internalSum::(HasMetadata g, Buildable f g)=>[MDWrapped f g a]->f a
 internalSum mdws = case length mdws of
