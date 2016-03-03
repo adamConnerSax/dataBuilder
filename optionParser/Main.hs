@@ -32,7 +32,7 @@ instance Builder Parser OPBMDH Config
 main::IO ()
 main = (execParser $ info (helper <*> parser) infoMod) >>= print where
   opbOptions = OPBOptions True
---  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Just $ configDefault) -- supplies defaults for everything
+  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Just $ configDefault) -- supplies defaults for everything
   configDefault = Config "Hello" Nothing (Just Verbose) AProcess
   infoMod = fullDesc <> progDesc "Sample use of DataBuilder to create a parser from a data type"
-  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Nothing :: Maybe Config) -- no defaults
+--  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Nothing :: Maybe Config) -- no defaults

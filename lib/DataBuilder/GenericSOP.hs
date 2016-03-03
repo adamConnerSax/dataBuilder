@@ -26,6 +26,7 @@
 module DataBuilder.GenericSOP
        (
          module GSOP
+       , getConstructorName
        )where
 
 import qualified GHC.Generics as GHC
@@ -117,7 +118,7 @@ type GBuilderTopC f g a = (BuildableC f g, GenericSOPC a, AllF (All (Builder f g
 instance GBuilderTopC f g a=>GBuilder f g a where
   gBuildM mdh ma = case ma of
     Nothing -> internalSum $ buildBlanks mdh
-    Just x  -> internalSum $ snd . unzip . M.toList $ M.insert  (fromJust . conName . getMetadata $ mdh) (buildDefaulted mdh x) (buildBlankMap mdh)
+    Just x  -> let cn = fromJust (getConstructorName x) in internalSum $ snd . unzip . M.toList $ M.insert  cn (buildDefaulted mdh x) (buildBlankMap mdh)
 
 buildBlankMap::forall f g a.GBuilderTopC f g a => g->MdwMap f g a
 buildBlankMap = mdwMapFromList . buildBlanks
@@ -161,10 +162,12 @@ buildBlank mdh tn ci =
 
 buildDefaulted::forall f g a.GBuilderTopC f g a => g->a->MDWrapped f g a
 buildDefaulted mdh a =
-  let allBuilder2 = Proxy :: Proxy (All (Builder f g))
+  let  {- mConName = getConstructorName a -}
+      allBuilder2 = Proxy :: Proxy (All (Builder f g))
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
+--      baseMdh = setMetadata (Metadata tn mConName (fieldName . getMetadata $ mdh)) mdh
       sopf   = SOP $ hcliftA2 allBuilder2 (buildDefFromConInfo mdh tn) cs (unSOP $ from a) -- SOP f xss
       sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
       fa = unFA $ (fmap to) . hsequence $ sopFAf                                           -- f a
@@ -181,3 +184,12 @@ buildDefFromConInfo mdh tn ci args =
         let builder::Builder f g a=>FieldInfo a->I a->f a
             builder fi ia = buildM (addFieldName fi mdhBase) (Just (unI ia))
         in hcliftA2 (Proxy :: Proxy (Builder f g)) builder fns args
+
+getConstructorName::forall a.GenericSOPC a=>a->Maybe ConName
+getConstructorName a =
+  let cs = case datatypeInfo (Proxy :: Proxy a) of
+        ADT _ tn cs -> cs
+        Newtype _ tn c -> c :* Nil
+      getConName::ConstructorInfo xs->NP I xs->K (Maybe ConName) xs
+      getConName ci args = K $ Just (ci2name ci)
+  in hcollapse $ hliftA2 getConName cs (unSOP $ from a)
