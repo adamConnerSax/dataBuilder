@@ -162,12 +162,10 @@ buildBlank mdh tn ci =
 
 buildDefaulted::forall f g a.GBuilderTopC f g a => g->a->MDWrapped f g a
 buildDefaulted mdh a =
-  let  {- mConName = getConstructorName a -}
-      allBuilder2 = Proxy :: Proxy (All (Builder f g))
+  let allBuilder2 = Proxy :: Proxy (All (Builder f g))
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
---      baseMdh = setMetadata (Metadata tn mConName (fieldName . getMetadata $ mdh)) mdh
       sopf   = SOP $ hcliftA2 allBuilder2 (buildDefFromConInfo mdh tn) cs (unSOP $ from a) -- SOP f xss
       sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
       fa = unFA $ (fmap to) . hsequence $ sopFAf                                           -- f a
