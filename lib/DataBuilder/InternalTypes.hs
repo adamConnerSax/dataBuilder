@@ -17,6 +17,8 @@ module DataBuilder.InternalTypes
   , Buildable(..)
   , Builder(..)
   , internalSum
+  , wrapBuildable
+  , FABuildable(unFA)
   ) where
 
 import Data.Maybe (isJust)
@@ -75,11 +77,15 @@ internalSum mdws = case length mdws of
   _ -> if buildersAllHaveConNames mdws then bSum mdws else bFail "Sum type for command encountered but constructor name(s) are missing."
 
 -- This is available to make clear that this structure is inherent in Buildable and so it can be used if necessary
-newtype FABuildable a = FABuildable { unFA::forall f g.Buildable f g=>f a }
+newtype FABuildable f a = FABuildable { unFA::f a }
 
-instance Functor FABuildable where
+-- we don't expose the constructor but we do expose wrapBuildable.  That way we can only wrap if f is Buildable
+wrapBuildable::Buildable f g=>f a->FABuildable f a
+wrapBuildable = FABuildable
+
+instance Buildable f g=>Functor (FABuildable f) where
   fmap f x = FABuildable $ (bMap f) (unFA x)
 
-instance Applicative FABuildable where
+instance Buildable f g=>Applicative (FABuildable f) where
   pure x = FABuildable $ bInject x
   x <*> y = FABuildable $ (unFA x) `bApply` (unFA y)
