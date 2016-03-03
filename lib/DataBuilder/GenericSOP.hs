@@ -23,10 +23,14 @@
 --
 -----------------------------------------------------------------------------
 
-module DataBuilder.GenericSOP where
+module DataBuilder.GenericSOP
+       (
+         module GSOP
+       )where
 
 import qualified GHC.Generics as GHC
-import Generics.SOP
+import Generics.SOP 
+import Generics.SOP as GSOP (Generic,HasDatatypeInfo)
 import Generics.SOP.Constraint (SListIN(..),AllF)
 import qualified Data.Map as M
 import Data.Maybe (fromJust)

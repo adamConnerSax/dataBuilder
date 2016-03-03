@@ -7,18 +7,18 @@ module Main where
 import OptPABuilder
 import Options.Applicative
 import DataBuilder.TH (deriveBuilder)
-import GHC.Generics
+import qualified GHC.Generics as GHCG
 import DataBuilder.Types (Builder)
 import DataBuilder.GenericSOP
-import qualified Generics.SOP as GSOP
+--import qualified Generics.SOP as GSOP
 
 
 data Mode = Verbose | Silent deriving (Show,Enum,Bounded)
 data Process = AProcess | BProcess deriving (Show,Enum,Bounded)
-data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,Generic)
+data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,GHCG.Generic)
 
-instance GSOP.Generic Config
-instance GSOP.HasDatatypeInfo Config
+instance Generic Config
+instance HasDatatypeInfo Config
 instance Builder Parser OPBMDH Config
 
 {- Also supports commands automatically if you derive the builder for a sum type
