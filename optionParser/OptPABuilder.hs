@@ -46,19 +46,20 @@ sumToCommand mdws =
 --shortAndLong::HasName f=>String->Mod f a
 shortAndLong x = long x <> short (head x)
 
-parseReadable::(Read a,Show a)=>ReadM a->OPBMDH->Maybe a->Parser a
-parseReadable reader opbmdh ma = case (fieldName . getMetadata $ opbmdh) of
-  Nothing->argument reader (maybe mempty Options.Applicative.value ma)
-  Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> sdOption opbmdh)
+parseReadable::(Read a,Show a)=>ReadM a->Maybe String->OPBMDH->Maybe a->Parser a
+parseReadable reader mHelp opbmdh ma =
+  case (fieldName . getMetadata $ opbmdh) of
+    Nothing->argument reader ((maybe mempty Options.Applicative.value ma) <> (maybe mempty help mHelp))
+    Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> sdOption opbmdh <> (maybe mempty help mHelp))
 
 instance Builder Parser OPBMDH Int where
-  buildM = parseReadable auto
+  buildM = parseReadable auto (Just "Int")
 
 instance Builder Parser OPBMDH Double where
-  buildM = parseReadable auto
+  buildM = parseReadable auto (Just "Double")
 
 instance Builder Parser OPBMDH String where
-  buildM = parseReadable str
+  buildM = parseReadable str (Just "String")
 
 instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser OPBMDH e where
   buildM opbmdh mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)) <> sdOption opbmdh)) [minBound :: e..] where

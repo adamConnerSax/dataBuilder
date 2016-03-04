@@ -13,8 +13,14 @@ import DataBuilder.GenericSOP
 --import qualified Generics.SOP as GSOP
 
 
-data Mode = Verbose | Silent deriving (Show,Enum,Bounded)
-data Process = AProcess | BProcess deriving (Show,Enum,Bounded)
+data Mode = Verbose | Silent deriving (Show,Enum,Bounded,GHCG.Generic)
+instance Generic Mode
+instance HasDatatypeInfo Mode
+
+data Process = AProcess | BProcess deriving (Show,Enum,Bounded,GHCG.Generic)
+instance Generic Process
+instance HasDatatypeInfo Process
+
 data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,GHCG.Generic)
 
 instance Generic Config
@@ -32,7 +38,7 @@ instance Builder Parser OPBMDH Config
 main::IO ()
 main = (execParser $ info (helper <*> parser) infoMod) >>= print where
   opbOptions = OPBOptions True
-  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Just $ configDefault) -- supplies defaults for everything
+--  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Just $ configDefault) -- supplies defaults for everything
   configDefault = Config "Hello" Nothing (Just Verbose) AProcess
   infoMod = fullDesc <> progDesc "Sample use of DataBuilder to create a parser from a data type"
---  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Nothing :: Maybe Config) -- no defaults
+  parser = buildM (typeOnlyOPBMDH opbOptions "Config") (Nothing :: Maybe Config) -- no defaults
