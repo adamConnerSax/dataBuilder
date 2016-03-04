@@ -2,12 +2,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE NoMonomorphismRestriction #-} --just for demo.  Allows polymorphic result printer
+
 module Main where
 
-import DataBuilderTH
-import Language.Haskell.TH
+import DataBuilder.Types
+import DataBuilder.TH
 import Data.List (intercalate,find)
 import Text.Read (readMaybe)
 import System.IO (hFlush,stdout)
@@ -23,7 +23,11 @@ data TestNested = Nested Int String TestSum deriving (Show)
 
 newtype BuilderEx a = BuilderEx { bldr::IO (Maybe a) }
 
-instance Buildable BuilderEx where
+instance Functor BuilderEx where
+  fmap f bea = BuilderEx $ (fmap f) <$> bldr bea
+
+instance Buildable BuilderEx Metadata where
+  bMap = fmap 
   bInject x = BuilderEx $ return (Just x)
   bApply bAB bA = BuilderEx $ do
     mAB <- (bldr bAB)
@@ -34,32 +38,19 @@ instance Buildable BuilderEx where
 
 
 -- the only tricky part.  How to handle sum types?
-sumBEs::[MDWrapped BuilderEx a]->BuilderEx a
-sumBEs mdws = case (buildersHaveConNames mdws) of
-  False -> bFail "At least one constructor is missing metadata in sumBEs!"
-  True -> BuilderEx $ do
-    let starDefault mdw = fromJust (mdwCN mdw) ++ if hasDefault mdw then "*" else ""
-        conNames = map starDefault mdws
-        names = intercalate "," conNames
-        prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
-    putStr prompt
-    hFlush stdout
-    chosen <- getLine
-    let mMDW = find (\mdw -> chosen == (fromJust (mdwCN mdw))) mdws
-    case mMDW of
-      Nothing -> bldr $ bFail (chosen ++ " unrecognized constructor!")
-      Just mdw -> bldr $ value mdw
-
-
-mdwCN::MDWrapped f a -> Maybe ConName
-mdwCN x = conName (metadata x) 
-
-mdwHasConName::MDWrapped f a->Bool
-mdwHasConName mdw = maybe False (const True) (mdwCN mdw) -- Lens??
-
-buildersHaveConNames::[MDWrapped f a]->Bool
-buildersHaveConNames bes = null (filter (not . mdwHasConName) bes) 
---
+sumBEs::[MDWrapped BuilderEx Metadata a]->BuilderEx a
+sumBEs mdws = BuilderEx $ do
+  let starDefault mdw = fromJust (getmConName mdw) ++ if hasDefault mdw then "*" else ""
+      conNames = map starDefault mdws
+      names = intercalate "," conNames
+      prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
+  putStr prompt
+  hFlush stdout
+  chosen <- getLine
+  let mMDW = find (\mdw -> chosen == (fromJust (getmConName mdw))) mdws
+  case mMDW of
+    Nothing -> bldr $ bFail (chosen ++ " unrecognized constructor!")
+    Just mdw -> bldr $ value mdw
 
 
 -- You need base case builders in order to build at least primitive types
@@ -79,16 +70,16 @@ simpleBuilder md (Just a) = BuilderEx $ do
 
 -- This is overlappable so that we can use the TH to derive this for things.
 -- Otherwise this covers all things since the constraints don't restrict matching.
-instance {-# OVERLAPPABLE #-} (Show a, Read a)=>Builder BuilderEx a where
+instance {-# OVERLAPPABLE #-} (Show a, Read a)=>Builder BuilderEx Metadata a where
   buildM = simpleBuilder 
 
 
-deriveBuilder ''BuilderEx ''TestNull
-deriveBuilder ''BuilderEx ''TestOne
-deriveBuilder ''BuilderEx ''TestTwo
-deriveBuilder ''BuilderEx ''TestSum
-deriveBuilder ''BuilderEx ''TestRecord
-deriveBuilder ''BuilderEx ''TestNested
+deriveBuilder ''BuilderEx ''Metadata ''TestNull
+deriveBuilder ''BuilderEx ''Metadata ''TestOne
+deriveBuilder ''BuilderEx ''Metadata ''TestTwo
+deriveBuilder ''BuilderEx ''Metadata ''TestSum
+deriveBuilder ''BuilderEx ''Metadata ''TestRecord
+deriveBuilder ''BuilderEx ''Metadata ''TestNested
 
 g = maybe (putStrLn "built Nothing") (putStrLn . show) 
 

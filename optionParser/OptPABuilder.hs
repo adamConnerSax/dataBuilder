@@ -1,66 +1,73 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE NoMonomorphismRestriction #-} --just for demo.  Allows polymorphic result printer
-module OptPABuilder where
+{-# LANGUAGE TemplateHaskell #-}
+module OptPABuilder
+       (
+         OPBOptions(..)
+       , OPBMDH
+       , typeOnlyOPBMDH
+       , buildM
+       , deriveBuilder
+       ) where
 
-import DataBuilderTH
+import DataBuilder.Types
 import Data.Maybe (fromJust)
 import Data.Char (toLower)
 import Options.Applicative
+import DataBuilder.TH (deriveBuilder)
 
-instance Buildable Parser where
+data OPBOptions = OPBOptions { showDefaults::Bool }
+data OPBMDH = OPBMDH { options::OPBOptions, metadata::Metadata }
+
+typeOnlyOPBMDH::OPBOptions->TypeName->OPBMDH
+typeOnlyOPBMDH op tn = OPBMDH op (typeOnlyMD tn)
+
+sdOption (OPBMDH op _) = if (showDefaults op) then showDefault else mempty
+
+instance HasMetadata OPBMDH where
+  getMetadata = metadata
+  setMetadata md' (OPBMDH op _) = OPBMDH op md' 
+
+instance Buildable Parser OPBMDH where
+  bMap = fmap 
   bInject = pure 
   bApply = (<*>)
   bFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
   bSum = sumToCommand
 
 -- derive a command parser from a sum-type
-sumToCommand::[MDWrapped Parser a]->Parser a
-sumToCommand mdws = case (buildersHaveConNames mdws) of
-  False -> bFail "Sum type for command encountered but constructor name(s) are missing."
-  True ->
-    let makeCommand mdw = command (fromJust $ mdwCN mdw) (info (DataBuilderTH.value mdw) mempty)
-    in subparser $ mconcat (map makeCommand mdws)
+sumToCommand::[MDWrapped Parser OPBMDH a]->Parser a
+sumToCommand mdws =
+  let makeCommand mdw = command (fromJust $ getmConName mdw) (info (DataBuilder.Types.value mdw) mempty)
+  in subparser $ mconcat (map makeCommand mdws)
 
-mdwCN::MDWrapped f a -> Maybe ConName
-mdwCN x = conName (metadata x) 
-
-mdwHasConName::MDWrapped f a->Bool
-mdwHasConName mdw = maybe False (const True) (mdwCN mdw) -- Lens??
-
-buildersHaveConNames::[MDWrapped f a]->Bool
-buildersHaveConNames bes = null (filter (not . mdwHasConName) bes) 
---
 --shortAndLong::HasName f=>String->Mod f a
 shortAndLong x = long x <> short (head x)
 
-parseReadable::Read a=>ReadM a->Metadata->Maybe a->Parser a
-parseReadable reader md ma = case (fieldName md) of
-  Nothing->argument reader (maybe mempty Options.Applicative.value ma)
-  Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName))
+parseReadable::(Read a,Show a)=>ReadM a->Maybe String->OPBMDH->Maybe a->Parser a
+parseReadable reader mHelp opbmdh ma =
+  case (fieldName . getMetadata $ opbmdh) of
+    Nothing->argument reader ((maybe mempty Options.Applicative.value ma) <> (maybe mempty help mHelp))
+    Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> sdOption opbmdh <> (maybe mempty help mHelp))
 
-instance Builder Parser Int where
-  buildM = parseReadable auto
+instance Builder Parser OPBMDH Int where
+  buildM = parseReadable auto (Just "Int")
 
-instance Builder Parser Double where
-  buildM = parseReadable auto
+instance Builder Parser OPBMDH Double where
+  buildM = parseReadable auto (Just "Double")
 
-instance Builder Parser String where
-  buildM = parseReadable str
+instance Builder Parser OPBMDH String where
+  buildM = parseReadable str (Just "String")
 
-instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser e where
-  buildM md mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
+instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser OPBMDH e where
+  buildM opbmdh mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)) <> sdOption opbmdh)) [minBound :: e..] where
     fl = maybe flag' flag mE
-    optDesc = maybe mempty help (fieldName md) 
+    optDesc = maybe mempty help (fieldName . getMetadata $ opbmdh) 
 
-
-instance {-# OVERLAPPABLE #-} Builder Parser a=>Builder Parser (Maybe a) where
-  buildM md mmA = optional $ maybe (buildM md Nothing) (buildM md) mmA 
-
+instance {-# OVERLAPPABLE #-} Builder Parser OPBMDH a=>Builder Parser OPBMDH (Maybe a) where
+  buildM opbmdh mmA = optional $ maybe (buildM opbmdh Nothing) (buildM opbmdh) mmA 
 
 
 

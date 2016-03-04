@@ -1,8 +1,10 @@
 DataBuilder
 
-Prototype template haskell to monadically build a value of type a from an existing value of a (or Nothing::Maybe a) using a typeclass.  Provide base builders via class instances (for simple types, like Int, String, etc.), and a function to handle sum types, and the derived class will create a builder for types built of sums and products of types with builders.  Something like Aeson's FromJSON.
+Prototype template haskell to applicatively build a value of type a from an existing value of a (or Nothing::Maybe a) using a typeclass.  Provide base builders via class instances (for simple types, like Int, String, etc.), and a function to handle sum types, and the derived class will create a builder for types built of sums and products of types with builders.  Something like Aeson's FromJSON.
 
-For any given type, you may make your own builder (by writing your won instance of Builder f) if the template derived behavior is not appropriate.
+Extra, runtime specified, options may be passed to each builder by creating a type to wrap the type-level metadata and deriving HasMetadata.  See the optionParser example for more details.
+
+For any given type, you may make your own builder (by writing your own instance of Builder f g a) if the template derived behavior is not appropriate.
 
 Types:
 
@@ -12,16 +14,27 @@ type FieldName = String
 type ConName = String
 data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName::Maybe FieldName}
 
-data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::Metadata, value::f a } --Exposed so data is available for sum type handling and hand derived instances of Builder
+class HasMetadata a where
+  getMetadata::a->Metadata
+  setMetadata::Metadata->a->a
 
-class Buildable f where
+data MDWrapped f g a = MDWrapped { hasDefault::Bool, metadataHolder::g, value::f a }
+
+instance HasMetadata g=>HasMetadata (MDWrapped f g a) where
+  getMetadata = getMetadata . metadataHolder 
+  setMetadata md (MDWrapped hd mdh v) = let mdh' = setMetadata md mdh in MDWrapped hd mdh' v
+
+
+class Buildable f g | f->g where
   -- inject and apply are exactly Applicative, inject=pure and apply=(<*>). 
   bInject::a -> f a
   bApply::f (a->b) -> f a -> f b
-  bSum::[MDWrapped f a]->f a
+  bFail::String->f a -- handle errors...
+  bSum::[MDWrapped f g a]->f a -- this only gets called if you have > 1 (actual sum type).  If you have 0 or > 1 but are missing a constructor, bFail is called.
 
-class Builder f a where
-  buildM::Buildable f=>Metadata->Maybe a-> f a
+class Builder f g a where
+  buildM::(HasMetadata g,Buildable f g)=>g->Maybe a-> f a
+
 
 ```
 
