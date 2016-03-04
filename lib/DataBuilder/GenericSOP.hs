@@ -33,8 +33,10 @@ import qualified GHC.Generics as GHC
 import Generics.SOP 
 import Generics.SOP as GSOP (Generic,HasDatatypeInfo)
 import Generics.SOP.Constraint (SListIN(..),AllF)
+import Generics.SOP.Dict
 import qualified Data.Map as M
 import Data.Maybe (fromJust)
+import Data.Monoid ((<>))
 --
 import DataBuilder.InternalTypes
 
@@ -73,8 +75,10 @@ mdwMapToList = snd . unzip . M.toList
 mdwMapFromList::HasMetadata g=>[MDWrapped f g a]->MdwMap f g a
 mdwMapFromList mdws = M.fromList $ zip ((fromJust . conName . getMetadata) <$> mdws) mdws
 
+--class (Builder f g a,HasDatatypeInfo a)=>GBuilderC f g a
 
-type GBuilderTopC f g a = (BuildableC f g, GenericSOPC a, AllF (All (Builder f g)) (Code a))
+
+type GBuilderTopC f g a = (BuildableC f g, GenericSOPC a, All2 (Builder f g) (Code a), All2 HasDatatypeInfo (Code a))
 
 instance GBuilderTopC f g a=>GBuilder f g a where
   gBuildM mdh ma = case ma of
@@ -96,46 +100,47 @@ buildBlanks mdh =
         makeMDW (mdh',bldr) = MDWrapped False mdh' bldr
     in makeMDW <$> mbs
 
+dictWith = flip withDict
 
-type GBuilderC2 f g xss = (BuildableC f g, All2 (Builder f g) xss, SListI2 xss)
+type All2C f g xss = (All2 (Builder f g) xss, All2 HasDatatypeInfo xss)
+type GBuilderC2 f g xss = (BuildableC f g, All2C f g xss, SListI2 xss)
 buildBlanks'::forall f g xss.GBuilderC2 f g xss => g->DatatypeName->NP ConstructorInfo xss->[(FABuildable f) (SOP I xss)]
 buildBlanks' mdh tn cs =
-  let allBuilder2 = Proxy :: Proxy (All (Builder f g))
-      pop = POP $ hcliftA allBuilder2 (buildBlank mdh tn) cs -- POP f xss
+  let dH  = Dict :: Dict (All2 HasDatatypeInfo) xss
+      dHNP = unAll_NP $ unAll2 dH -- NP (Dict (All HasDataTypeInfo)) xss
+      allBuilder = Proxy :: Proxy (All (Builder f g))
+      pop = POP $ hcliftA2 allBuilder (\d->withDict d (buildBlank mdh tn)) dHNP cs
       wrapped = hliftA wrapBuildable pop -- POP (FABuildable f) xss
       sop = apInjs_POP wrapped -- [SOP (FABuildable f) xss]
-      in hsequence <$> sop -- [(FABuildable f) (SOP I xss)]
+  in hsequence <$> sop -- [(FABuildable f) (SOP I xss)]
 
 
-type GBuilderC1 f g xs  = (BuildableC f g, All (Builder f g) xs {-, All HasDatatypeInfo xs-}, SListI xs)
-type GBDTC f g a = (Builder f g a,HasDatatypeInfo a)
-
+type GBuilderC1 f g xs  = (BuildableC f g, All (Builder f g) xs, All HasDatatypeInfo xs, SListI xs)
 buildBlank::forall f g xs.GBuilderC1 f g xs => g->DatatypeName->ConstructorInfo xs->NP f xs
 buildBlank mdh tn ci = 
     let mdhBase = setMetadata (Metadata tn (Just $ ci2name ci) Nothing) mdh
         fieldNames = ci2RecordNames ci
-        allC = Proxy :: Proxy (And (Builder f g) (HasDatatypeInfo))
+        typeNames = gTypeNames :: NP (K DatatypeName) xs
         allBuilder = Proxy :: Proxy (Builder f g)
     in case fieldNames of 
-         Nothing -> hcpure allBuilder (buildM mdhBase Nothing)
-{-
-           let builder::Builder f g a=>K DatatypeName a -> f a
-               builder tn = buildM (setTypeName tn mdhBase) Nothing
-           in hcliftA allC builder gTypeNames
--}
-         Just fns -> 
-             let builder::Builder f g a=>FieldInfo a -> f a
-                 builder fi = buildM (setFieldName fi mdhBase) Nothing
-             in hcliftA allBuilder builder fns
+           Nothing -> let builder::Builder f g a=>K DatatypeName a -> f a
+                          builder tn = buildM (setTypeName tn mdhBase) Nothing
+                      in hcliftA allBuilder builder typeNames
+           Just fns -> 
+             let builder::Builder f g a=>FieldInfo a -> K DatatypeName a-> f a
+                 builder fi ktn = buildM (setTypeAndFieldNames ktn fi mdhBase) Nothing
+             in hcliftA2 allBuilder builder fns typeNames
 
 
 buildDefaulted::forall f g a.GBuilderTopC f g a => g->a->MDWrapped f g a
 buildDefaulted mdh a =
-  let allBuilder2 = Proxy :: Proxy (All (Builder f g))
+  let allBuilder = Proxy :: Proxy (All (Builder f g))
+      dH  = Dict :: Dict (All2 HasDatatypeInfo) (Code a)
+      dHNP = unAll_NP $ unAll2 dH -- NP (Dict (All HasDataTypeInfo)) xss
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
-      sopf   = SOP $ hcliftA2 allBuilder2 (buildDefFromConInfo mdh tn) cs (unSOP $ from a) -- SOP f xss
+      sopf   = SOP $ hcliftA3 allBuilder (\d -> withDict d (buildDefFromConInfo mdh tn)) dHNP cs (unSOP $ from a) -- SOP f xss
       sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
       fa = unFA $ (fmap to) . hsequence $ sopFAf                                           -- f a
   in MDWrapped True mdh fa
@@ -145,12 +150,17 @@ buildDefFromConInfo::forall f g xs.GBuilderC1 f g xs=>g->DatatypeName->Construct
 buildDefFromConInfo mdh tn ci args =
   let mdhBase = setMetadata (Metadata tn (Just $ ci2name ci) Nothing) mdh
       fieldNames = ci2RecordNames ci
+      typeNames = gTypeNames :: NP (K DatatypeName) xs
+      builderC = Proxy :: Proxy (Builder f g)
   in case fieldNames of
-      Nothing -> hcliftA (Proxy :: Proxy (Builder f g)) (\ia -> buildM mdhBase (Just (unI ia))) args
+      Nothing ->
+        let builder::Builder f g a=>K DatatypeName a -> I a -> f a
+            builder ktn ia = buildM (setTypeName ktn mdhBase) (Just $ unI ia)
+        in hcliftA2 builderC builder typeNames args
       Just fns ->
-        let builder::Builder f g a=>FieldInfo a->I a->f a
-            builder fi ia = buildM (setFieldName fi mdhBase) (Just (unI ia))
-        in hcliftA2 (Proxy :: Proxy (Builder f g)) builder fns args
+        let builder::Builder f g a=>FieldInfo a->K DatatypeName a->I a->f a
+            builder fi ktn ia = buildM (setTypeAndFieldNames ktn fi mdhBase) (Just (unI ia))
+        in hcliftA3 builderC builder fns typeNames args
 
 constructorName::forall a.GenericSOPC a=>a->Maybe ConName
 constructorName a =
@@ -166,7 +176,7 @@ gTypeName = case datatypeInfo (Proxy :: Proxy a) of
   ADT _ tn _ -> K tn
   Newtype _ tn _ -> K tn
 
-gTypeNames::forall xs.(All (HasDatatypeInfo) xs, SListI xs)=>NP (K DatatypeName) xs
+gTypeNames::forall xs.(All HasDatatypeInfo xs, SListI xs)=>NP (K DatatypeName) xs
 gTypeNames = hcpure (Proxy :: Proxy HasDatatypeInfo) gTypeName 
 
 
