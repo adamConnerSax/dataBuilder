@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -6,9 +7,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.GenericSOP
@@ -26,7 +24,6 @@
 module DataBuilder.GenericSOP
        (
          module GSOP --re-export the Generics.SOP classes for deriving
-       , gTypeName
        )where
 
 import qualified GHC.Generics as GHC
@@ -50,7 +47,7 @@ ci2RecordNames (Record _ fi) = Just fi
 ci2RecordNames _ = Nothing
 
 ci2md::HasMetadata g=>g->DatatypeName->ConstructorInfo xs->K g xs
-ci2md mdh tn ci = K $ setMetadata (Metadata tn (Just $ ci2name ci) (fieldName . getMetadata $ mdh)) mdh
+ci2md mdh tn ci = K $ flip setConName (ci2name ci) . flip setTypeName tn $ mdh 
 
 gAddMD::(HasMetadata g,SListI2 xss)=>g->DatatypeName->NP ConstructorInfo xss ->[g]
 gAddMD mdh tn cs = hcollapse $ hliftA (ci2md mdh tn) cs
@@ -58,14 +55,14 @@ gAddMD mdh tn cs = hcollapse $ hliftA (ci2md mdh tn) cs
 type GenericSOPC a = (Generic a, HasDatatypeInfo a)
 type BuildableC f g = (Buildable f g, HasMetadata g)
 
-setFieldName::forall a g.HasMetadata g=>FieldInfo a->g->g
-setFieldName fi mdh = let (FieldInfo fName) = fi in setMetadata ((getMetadata mdh)  { fieldName = Just fName }) mdh
+setFromFieldInfo::forall a g.HasMetadata g=>FieldInfo a->g->g
+setFromFieldInfo fi mdh = let (FieldInfo fName) = fi in setFieldName mdh fName
 
-setTypeName::forall g a.HasMetadata g=>K DatatypeName a->g->g
-setTypeName tn mdh = setMetadata ((getMetadata mdh) { typeName = unK tn }) mdh
+setFromTypeName::forall g a.HasMetadata g=>K DatatypeName a->g->g
+setFromTypeName tn mdh = setTypeName mdh (unK tn)
 
 setTypeAndFieldNames::forall g a.HasMetadata g=>K DatatypeName a->FieldInfo a->g->g
-setTypeAndFieldNames tn fi mdh = setFieldName fi (setTypeName tn mdh)
+setTypeAndFieldNames tn fi mdh = setFromFieldInfo fi (setFromTypeName tn mdh)
 
 type MdwMap f g a = M.Map ConName (MDWrapped f g a)
 
@@ -73,10 +70,7 @@ mdwMapToList::MdwMap f g a->[MDWrapped f g a]
 mdwMapToList = snd . unzip . M.toList
 
 mdwMapFromList::HasMetadata g=>[MDWrapped f g a]->MdwMap f g a
-mdwMapFromList mdws = M.fromList $ zip ((fromJust . conName . getMetadata) <$> mdws) mdws
-
---class (Builder f g a,HasDatatypeInfo a)=>GBuilderC f g a
-
+mdwMapFromList mdws = M.fromList $ zip ((fromJust . getmConName) <$> mdws) mdws
 
 type GBuilderTopC f g a = (BuildableC f g, GenericSOPC a, All2 (Builder f g) (Code a), All2 HasDatatypeInfo (Code a))
 
@@ -100,14 +94,11 @@ buildBlanks mdh =
         makeMDW (mdh',bldr) = MDWrapped False mdh' bldr
     in makeMDW <$> mbs
 
-dictWith = flip withDict
-
 type All2C f g xss = (All2 (Builder f g) xss, All2 HasDatatypeInfo xss)
 type GBuilderC2 f g xss = (BuildableC f g, All2C f g xss, SListI2 xss)
 buildBlanks'::forall f g xss.GBuilderC2 f g xss => g->DatatypeName->NP ConstructorInfo xss->[(FABuildable f) (SOP I xss)]
 buildBlanks' mdh tn cs =
-  let dH  = Dict :: Dict (All2 HasDatatypeInfo) xss
-      dHNP = unAll_NP $ unAll2 dH -- NP (Dict (All HasDataTypeInfo)) xss
+  let dHNP = unAll_NP $ unAll2 Dict :: NP (Dict (All HasDatatypeInfo)) xss
       allBuilder = Proxy :: Proxy (All (Builder f g))
       pop = POP $ hcliftA2 allBuilder (\d->withDict d (buildBlank mdh tn)) dHNP cs
       wrapped = hliftA wrapBuildable pop -- POP (FABuildable f) xss
@@ -121,22 +112,21 @@ buildBlank mdh tn ci =
     let mdhBase = setMetadata (Metadata tn (Just $ ci2name ci) Nothing) mdh
         fieldNames = ci2RecordNames ci
         typeNames = gTypeNames :: NP (K DatatypeName) xs
-        allBuilder = Proxy :: Proxy (Builder f g)
+        builderC = Proxy :: Proxy (Builder f g)
     in case fieldNames of 
-           Nothing -> let builder::Builder f g a=>K DatatypeName a -> f a
-                          builder tn = buildM (setTypeName tn mdhBase) Nothing
-                      in hcliftA allBuilder builder typeNames
+           Nothing ->
+             let builder::Builder f g a=>K DatatypeName a -> f a
+                 builder tn = buildM (setFromTypeName tn mdhBase) Nothing
+             in hcliftA builderC builder typeNames
            Just fns -> 
              let builder::Builder f g a=>FieldInfo a -> K DatatypeName a-> f a
                  builder fi ktn = buildM (setTypeAndFieldNames ktn fi mdhBase) Nothing
-             in hcliftA2 allBuilder builder fns typeNames
-
+             in hcliftA2 builderC builder fns typeNames
 
 buildDefaulted::forall f g a.GBuilderTopC f g a => g->a->MDWrapped f g a
 buildDefaulted mdh a =
   let allBuilder = Proxy :: Proxy (All (Builder f g))
-      dH  = Dict :: Dict (All2 HasDatatypeInfo) (Code a)
-      dHNP = unAll_NP $ unAll2 dH -- NP (Dict (All HasDataTypeInfo)) xss
+      dHNP = unAll_NP $ unAll2 Dict :: NP (Dict (All HasDatatypeInfo)) (Code a)
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
@@ -155,7 +145,7 @@ buildDefFromConInfo mdh tn ci args =
   in case fieldNames of
       Nothing ->
         let builder::Builder f g a=>K DatatypeName a -> I a -> f a
-            builder ktn ia = buildM (setTypeName ktn mdhBase) (Just $ unI ia)
+            builder ktn ia = buildM (setFromTypeName ktn mdhBase) (Just $ unI ia)
         in hcliftA2 builderC builder typeNames args
       Just fns ->
         let builder::Builder f g a=>FieldInfo a->K DatatypeName a->I a->f a

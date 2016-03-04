@@ -40,14 +40,14 @@ instance Buildable BuilderEx Metadata where
 -- the only tricky part.  How to handle sum types?
 sumBEs::[MDWrapped BuilderEx Metadata a]->BuilderEx a
 sumBEs mdws = BuilderEx $ do
-  let starDefault mdw = fromJust (mdwConName mdw) ++ if hasDefault mdw then "*" else ""
+  let starDefault mdw = fromJust (getmConName mdw) ++ if hasDefault mdw then "*" else ""
       conNames = map starDefault mdws
       names = intercalate "," conNames
       prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
   putStr prompt
   hFlush stdout
   chosen <- getLine
-  let mMDW = find (\mdw -> chosen == (fromJust (mdwConName mdw))) mdws
+  let mMDW = find (\mdw -> chosen == (fromJust (getmConName mdw))) mdws
   case mMDW of
     Nothing -> bldr $ bFail (chosen ++ " unrecognized constructor!")
     Just mdw -> bldr $ value mdw

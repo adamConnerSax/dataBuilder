@@ -13,8 +13,8 @@ module DataBuilder.InternalTypes
   , Metadata(..)
   , typeOnlyMD
   , HasMetadata(..)
+  , HasMetadataFields(..)
   , MDWrapped(..)
-  , mdwConName
   , Buildable(..)
   , Builder(..)
   , internalSum
@@ -35,13 +35,32 @@ data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName
 typeOnlyMD::TypeName->Metadata
 typeOnlyMD tn = Metadata tn Nothing Nothing
 
+-- We could use lenses for all this but that brings a lot of dependencies in where we had few. So we do it manually here.
 class HasMetadata a where
   getMetadata::a->Metadata
   setMetadata::Metadata->a->a
 
+class HasMetadataFields a where
+  getTypeName::a->TypeName
+  setTypeName::a->TypeName->a
+  getmConName::a->Maybe ConName
+  setConName::a->ConName->a
+  getmFieldName::a->Maybe FieldName
+  setFieldName::a->FieldName->a
+
 instance HasMetadata Metadata where
   getMetadata = id
   setMetadata x _ = x
+
+instance HasMetadata a => HasMetadataFields a where
+  getTypeName = typeName . getMetadata
+  setTypeName mdh tn = setMetadata ((getMetadata mdh) { typeName = tn }) mdh
+  getmConName = conName . getMetadata
+  setConName mdh cn = setMetadata ((getMetadata mdh) { conName = Just cn }) mdh 
+  getmFieldName = fieldName . getMetadata
+  setFieldName mdh fn = setMetadata ((getMetadata mdh) { fieldName = Just fn }) mdh 
+
+--
 
 data MDWrapped f g a = MDWrapped { hasDefault::Bool, metadataHolder::g, value::f a }
 
@@ -49,16 +68,14 @@ instance HasMetadata g=>HasMetadata (MDWrapped f g a) where
   getMetadata = getMetadata . metadataHolder
   setMetadata md (MDWrapped hd mdh v) = let mdh' = setMetadata md mdh in MDWrapped hd mdh' v
 
-mdwConName::HasMetadata g=>MDWrapped f g a -> Maybe ConName
-mdwConName x = conName (getMetadata x)
-
 mdwHasConName::HasMetadata g=>MDWrapped f g a->Bool
-mdwHasConName mdw = isJust (mdwConName mdw)
+mdwHasConName mdw = isJust (getmConName mdw)
 
 buildersAllHaveConNames::HasMetadata g=>[MDWrapped f g a]->Bool
 buildersAllHaveConNames bes = not (any (not . mdwHasConName) bes)
 
-{- We don't get the Functor and applicative methods from those classes becuase we may want to use this
+{-
+ - We don't get the Functor and applicative methods from those classes becuase we may want to use this
  - in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic
 -}
 class Buildable f g | f->g where

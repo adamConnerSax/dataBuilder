@@ -6,8 +6,9 @@ module DataBuilder.Types
        , Metadata(typeName,conName,fieldName)
        , typeOnlyMD
        , HasMetadata(..)
+       , HasMetadataFields(..)
        , MDWrapped(hasDefault,metadataHolder,value)
-       , mdwConName
+--       , mdwConName
        , Buildable(..)
        , Builder(..)
        ) where

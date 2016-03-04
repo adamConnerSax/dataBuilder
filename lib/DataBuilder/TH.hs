@@ -23,7 +23,7 @@ conNameAndTypes (RecC n vts) =
   let thrd (_,_,x) = x
       first (x,_,_) = x in return (n,thrd <$> vts, Just (first <$> vts))
 conNameAndTypes (InfixC (_,t) n (_,t')) = return (n, [t,t'], Nothing)
---InfixC and ForallC.  We could extract name and types but not sure we'd know how to apply them??
+--ForallC.  We could extract name and types but not sure we'd know how to apply them??
 conNameAndTypes c = unsupported ("constructor type in conNameAndTypes (" ++ show c ++ ")")
 
 getCons (DataD _ _ _ c _) = return c
@@ -113,8 +113,8 @@ builderPre typeN mdhE c = do
       conMetaHE = [e|setMetadata (Metadata $(sToE' typeN) (Just $(sToE' $ nameBase n)) ((fieldName . getMetadata) $(return mdhE))) $(return mdhE)|]
       conFE = [e|bInject $(conE n)|]
       mdhEs = case mFNs of
-        Nothing -> map (appE [e|\x->setMetadata (typeOnlyMD x) $(return mdhE)|]) tnEs
-        Just fnames -> map (appE [e|\(tn,fn) -> setMetadata (Metadata tn Nothing (Just fn)) $(return mdhE)|]) (zipE tnEs (map (sToE' . nameBase) fnames))
+        Nothing -> map (appE [e|\x->setTypeName $(return mdhE) x|]) tnEs
+        Just fnames -> map (appE [e|\(tn,fn) -> setFieldName (setTypeName $(return mdhE) tn) fn|]) (zipE tnEs (map (sToE' . nameBase) fnames))
   return (n,tl,conMetaHE,conFE,mdhEs)
 
 buildBlankBuilder::TypeName->Exp->Con->Q Exp

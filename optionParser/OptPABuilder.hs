@@ -40,7 +40,7 @@ instance Buildable Parser OPBMDH where
 -- derive a command parser from a sum-type
 sumToCommand::[MDWrapped Parser OPBMDH a]->Parser a
 sumToCommand mdws =
-  let makeCommand mdw = command (fromJust $ mdwConName mdw) (info (DataBuilder.Types.value mdw) mempty)
+  let makeCommand mdw = command (fromJust $ getmConName mdw) (info (DataBuilder.Types.value mdw) mempty)
   in subparser $ mconcat (map makeCommand mdws)
 
 --shortAndLong::HasName f=>String->Mod f a
