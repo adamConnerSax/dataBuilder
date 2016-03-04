@@ -25,8 +25,7 @@
 
 module DataBuilder.GenericSOP
        (
-         module GSOP
-       , getConstructorName
+         module GSOP --re-export the Generics.SOP classes for deriving
        )where
 
 import qualified GHC.Generics as GHC
@@ -118,7 +117,7 @@ type GBuilderTopC f g a = (BuildableC f g, GenericSOPC a, AllF (All (Builder f g
 instance GBuilderTopC f g a=>GBuilder f g a where
   gBuildM mdh ma = case ma of
     Nothing -> internalSum $ buildBlanks mdh
-    Just x  -> let cn = fromJust (getConstructorName x) in internalSum $ snd . unzip . M.toList $ M.insert  cn (buildDefaulted mdh x) (buildBlankMap mdh)
+    Just x  -> let cn = fromJust (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted mdh x) (buildBlankMap mdh)
 
 buildBlankMap::forall f g a.GBuilderTopC f g a => g->MdwMap f g a
 buildBlankMap = mdwMapFromList . buildBlanks
@@ -183,11 +182,19 @@ buildDefFromConInfo mdh tn ci args =
             builder fi ia = buildM (addFieldName fi mdhBase) (Just (unI ia))
         in hcliftA2 (Proxy :: Proxy (Builder f g)) builder fns args
 
-getConstructorName::forall a.GenericSOPC a=>a->Maybe ConName
-getConstructorName a =
+constructorName::forall a.GenericSOPC a=>a->Maybe ConName
+constructorName a =
   let cs = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> cs
         Newtype _ tn c -> c :* Nil
       getConName::ConstructorInfo xs->NP I xs->K (Maybe ConName) xs
       getConName ci args = K $ Just (ci2name ci)
   in hcollapse $ hliftA2 getConName cs (unSOP $ from a)
+
+gTypeName::forall a.HasDatatypeInfo a=>K DatatypeName a
+gTypeName = case datatypeInfo (Proxy :: Proxy a) of
+  ADT _ tn _ -> K tn
+  Newtype _ tn _ -> K tn
+
+gTypeNames::forall xs.(All (HasDatatypeInfo) xs, SListI xs)=>NP (K DatatypeName) xs
+gTypeNames = hcpure (Proxy :: Proxy HasDatatypeInfo) gTypeName 
