@@ -44,6 +44,7 @@ executable dataBuilderDemo
 
 executable dataBuilder-OptionParser
     main-is: Main.hs
+    other-modules: OptPABuilder
     build-depends:
         base -any,
         template-haskell -any,

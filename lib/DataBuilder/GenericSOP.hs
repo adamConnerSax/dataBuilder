@@ -29,11 +29,11 @@ module DataBuilder.GenericSOP
 import qualified GHC.Generics as GHC
 import Generics.SOP 
 import Generics.SOP as GSOP (Generic,HasDatatypeInfo)
-import Generics.SOP.Constraint (SListIN(..),AllF)
+--import Generics.SOP.Constraint (SListIN(..),AllF)
 import Generics.SOP.Dict
 import qualified Data.Map as M
 import Data.Maybe (fromJust)
-import Data.Monoid ((<>))
+--import Data.Monoid ((<>))
 --
 import DataBuilder.InternalTypes
 

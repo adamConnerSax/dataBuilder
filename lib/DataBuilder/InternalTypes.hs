@@ -5,6 +5,17 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DefaultSignatures #-}
+
+{-|
+Module: DataBuilder.InternalTypes
+Description: Types and TypeClasses for DataBuilder package
+Copyright: (c) Adam Conner-Sax 2016
+License: BSD3
+Maintainer: adam_conner_sax@yahoo.com
+
+This module contains basic types and typeclasses for the package.
+-}
+
 module DataBuilder.InternalTypes
   (
     TypeName
@@ -17,6 +28,7 @@ module DataBuilder.InternalTypes
   , MDWrapped(..)
   , Buildable(..)
   , Builder(..)
+    -- * Not exposed outside the library
   , internalSum
   , wrapBuildable
   , FABuildable(unFA)
@@ -35,7 +47,7 @@ data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName
 typeOnlyMD::TypeName->Metadata
 typeOnlyMD tn = Metadata tn Nothing Nothing
 
--- We could use lenses for all this but that brings a lot of dependencies in where we had few. So we do it manually here.
+{-| We could use lenses for all this but that brings a lot of dependencies in where we had few. So we do it manually here. -}
 class HasMetadata a where
   getMetadata::a->Metadata
   setMetadata::Metadata->a->a
@@ -60,7 +72,6 @@ instance HasMetadata a => HasMetadataFields a where
   getmFieldName = fieldName . getMetadata
   setFieldName mdh fn = setMetadata ((getMetadata mdh) { fieldName = Just fn }) mdh 
 
---
 
 data MDWrapped f g a = MDWrapped { hasDefault::Bool, metadataHolder::g, value::f a }
 
@@ -74,18 +85,19 @@ mdwHasConName mdw = isJust (getmConName mdw)
 buildersAllHaveConNames::HasMetadata g=>[MDWrapped f g a]->Bool
 buildersAllHaveConNames bes = not (any (not . mdwHasConName) bes)
 
-{-
- - We don't get the Functor and applicative methods from those classes becuase we may want to use this
- - in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic
+{-|
+We don't get the Functor and applicative methods from those classes becuase we may want to use this
+in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic.  Though it needs to have equivalent
+functionality.
 -}
 class Buildable f g | f->g where
-  -- here only so we can derive the functor instance of the wrapped version
+  -- so we can derive the functor instance of the wrapped version
   bMap::(a->b) -> f a->f b
   -- inject and apply are exactly Applicative, inject=pure and apply=(<*>).
   bInject::a -> f a
   bApply::f (a->b) -> f a -> f b
   bFail::String->f a -- if there's a graceful way to handle errors...
-  bSum::[MDWrapped f g a]->f a -- this only gets called if you have > 1 and all have constructor names in Metadata
+  bSum::[MDWrapped f g a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g a where
   gBuildM::(HasMetadata g,Buildable f g)=>g->Maybe a-> f a
@@ -101,7 +113,7 @@ internalSum mdws = case length mdws of
   1 -> value (head mdws)
   _ -> if buildersAllHaveConNames mdws then bSum mdws else bFail "Sum type for command encountered but constructor name(s) are missing."
 
--- This is available to make clear that this structure is inherent in Buildable and so it can be used if necessary
+
 newtype FABuildable f a = FABuildable { unFA::f a }
 
 -- we don't expose the constructor but we do expose wrapBuildable.  That way we can only wrap if f is Buildable
