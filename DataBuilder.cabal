@@ -19,9 +19,10 @@ source-repository head
 
 library
     exposed-modules:
+        DataBuilder                        
         DataBuilder.TH
         DataBuilder.Types
-        DataBuilder.GenericSOP            
+        DataBuilder.GenericSOP
     build-depends:
         base >=4.7 && <5,
         template-haskell -any,
