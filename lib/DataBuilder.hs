@@ -23,7 +23,12 @@ Once you have an instance of Buildable, you can instantiate your builders.  You 
 
 This file just exports the relevant types and the Template Haskell and Generic implementations of the instances.
 -}
-module DataBuilder where
+module DataBuilder
+       (
+           module DataBuilder.Types
+         , module DataBuilder.TH
+         , module DataBuilder.GenericSOP
+       ) where
 
 import DataBuilder.Types
 import DataBuilder.TH
