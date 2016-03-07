@@ -21,25 +21,26 @@ data Process = AProcess | BProcess deriving (Show,Enum,Bounded,GHCG.Generic)
 instance Generic Process
 instance HasDatatypeInfo Process
 
-data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,GHCG.Generic)
+--data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,GHCG.Generic)
 
 
-{- Also supports commands automatically if you derive the builder for a sum type
+-- Also supports commands automatically if you derive the builder for a sum type
 data Commands = DoA {aFile::String} | DoB {bFile::String, bFlag::Bool} deriving (Show,GHCG.Generic)
 instance Generic Commands
 instance HasDatatypeInfo Commands
+instance Builder Parser OPBMDH Commands -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
 
 data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show,GHCG.Generic)
-deriveBuilder ''Parser ''Commands
--}
+--deriveBuilder ''Parser ''OPBMDH ''Commands
+
 
 
 instance Generic Config
 instance HasDatatypeInfo Config
---instance Builder Parser OPBMDH Config -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo 
+instance Builder Parser OPBMDH Config -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo 
 
 
-deriveBuilder ''Parser ''OPBMDH ''Config --uses TH to build the instance.  Then you do not need the Generic or HasDatatypeInfo instances
+--deriveBuilder ''Parser ''OPBMDH ''Config --uses TH to build the instance.  Then you do not need the Generic or HasDatatypeInfo instances
 
 
 main::IO ()

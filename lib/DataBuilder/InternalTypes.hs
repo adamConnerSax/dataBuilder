@@ -111,7 +111,7 @@ internalSum::(HasMetadata g, Buildable f g)=>[MDWrapped f g a]->f a
 internalSum mdws = case length mdws of
   0 -> bFail "Internal error in DataBuilder.  No Constructors in Sum!"
   1 -> value (head mdws)
-  _ -> if buildersAllHaveConNames mdws then bSum mdws else bFail "Sum type for command encountered but constructor name(s) are missing."
+  _ -> if buildersAllHaveConNames mdws then bSum mdws else bFail "Sum type encountered but constructor name(s) are missing."
 
 
 newtype FABuildable f a = FABuildable { unFA::f a }

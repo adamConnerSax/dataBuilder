@@ -38,6 +38,8 @@ typeShow :: Type -> Maybe String
 typeShow (ConT n) = Just $ toLower <$> nameBase n
 typeShow (VarT n) = Just $ toLower <$> nameBase n
 typeShow (TupleT n) = Just $ "tuple" ++ show n
+typeShow ListT = Just $ "[]"
+typeShow (AppT ListT t) = typeShow t >>= \x->Just ("listOf" ++ x) 
 typeShow (AppT t1 t2) = do
   ts1 <- typeShow t1
   ts2 <- typeShow t2

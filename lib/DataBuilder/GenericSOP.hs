@@ -64,6 +64,9 @@ setFromTypeName tn mdh = setTypeName mdh (unK tn)
 setTypeAndFieldNames::forall g a.HasMetadata g=>K DatatypeName a->FieldInfo a->g->g
 setTypeAndFieldNames tn fi mdh = setFromFieldInfo fi (setFromTypeName tn mdh)
 
+setmConName::forall a g.HasMetadata g=>Maybe ConName->g->g
+setmConName mcn mdh = setMetadata (Metadata (getTypeName $ getMetadata mdh) mcn (getmFieldName $ getMetadata mdh)) mdh
+
 type MdwMap f g a = M.Map ConName (MDWrapped f g a)
 
 mdwMapToList::MdwMap f g a->[MDWrapped f g a]
@@ -125,15 +128,17 @@ buildBlank mdh tn ci =
 
 buildDefaulted::forall f g a.GBuilderTopC f g a => g->a->MDWrapped f g a
 buildDefaulted mdh a =
-  let allBuilder = Proxy :: Proxy (All (Builder f g))
+  let mcn = constructorName a
+      mdhBase = setmConName mcn mdh
+      allBuilder = Proxy :: Proxy (All (Builder f g))
       dHNP = unAll_NP $ unAll2 Dict :: NP (Dict (All HasDatatypeInfo)) (Code a)
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
-      sopf   = SOP $ hcliftA3 allBuilder (\d -> withDict d (buildDefFromConInfo mdh tn)) dHNP cs (unSOP $ from a) -- SOP f xss
+      sopf   = SOP $ hcliftA3 allBuilder (\d -> withDict d (buildDefFromConInfo mdhBase tn)) dHNP cs (unSOP $ from a) -- SOP f xss
       sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
       fa = unFA $ (fmap to) . hsequence $ sopFAf                                           -- f a
-  in MDWrapped True mdh fa
+  in MDWrapped True mdhBase fa
 
 
 buildDefFromConInfo::forall f g xs.GBuilderC1 f g xs=>g->DatatypeName->ConstructorInfo xs->NP I xs->NP f xs
