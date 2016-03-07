@@ -25,10 +25,11 @@ This file just exports the relevant types and the Template Haskell and Generic i
 -}
 module DataBuilder
        (
-           module DataBuilder.Types
-         , module DataBuilder.TH
-         , module DataBuilder.GenericSOP
-       ) where
+         module DataBuilder.Types
+       , module DataBuilder.TH
+       , module DataBuilder.GenericSOP
+       )where
+
 
 import DataBuilder.Types
 import DataBuilder.TH
