@@ -26,7 +26,7 @@ newtype BuilderEx a = BuilderEx { bldr::IO (Maybe a) }
 instance Functor BuilderEx where
   fmap f bea = BuilderEx $ (fmap f) <$> bldr bea
 
-instance Buildable BuilderEx Metadata where
+instance Buildable BuilderEx where
   bMap = fmap 
   bInject x = BuilderEx $ return (Just x)
   bApply bAB bA = BuilderEx $ do
@@ -38,16 +38,16 @@ instance Buildable BuilderEx Metadata where
 
 
 -- the only tricky part.  How to handle sum types?
-sumBEs::[MDWrapped BuilderEx Metadata a]->BuilderEx a
+sumBEs::[MDWrapped BuilderEx a]->BuilderEx a
 sumBEs mdws = BuilderEx $ do
-  let starDefault mdw = fromJust (getmConName mdw) ++ if hasDefault mdw then "*" else ""
+  let starDefault mdw = fromJust (conName $ metadata mdw) ++ if hasDefault mdw then "*" else ""
       conNames = map starDefault mdws
       names = intercalate "," conNames
       prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
   putStr prompt
   hFlush stdout
   chosen <- getLine
-  let mMDW = find (\mdw -> chosen == (fromJust (getmConName mdw))) mdws
+  let mMDW = find (\mdw -> chosen == (fromJust . conName . metadata $ mdw)) mdws
   case mMDW of
     Nothing -> bldr $ bFail (chosen ++ " unrecognized constructor!")
     Just mdw -> bldr $ value mdw
@@ -70,16 +70,16 @@ simpleBuilder md (Just a) = BuilderEx $ do
 
 -- This is overlappable so that we can use the TH to derive this for things.
 -- Otherwise this covers all things since the constraints don't restrict matching.
-instance {-# OVERLAPPABLE #-} (Show a, Read a)=>Builder BuilderEx Metadata a where
+instance {-# OVERLAPPABLE #-} (Show a, Read a)=>Builder BuilderEx a where
   buildM = simpleBuilder 
 
 
-deriveBuilder ''BuilderEx ''Metadata ''TestNull
-deriveBuilder ''BuilderEx ''Metadata ''TestOne
-deriveBuilder ''BuilderEx ''Metadata ''TestTwo
-deriveBuilder ''BuilderEx ''Metadata ''TestSum
-deriveBuilder ''BuilderEx ''Metadata ''TestRecord
-deriveBuilder ''BuilderEx ''Metadata ''TestNested
+deriveBuilder ''BuilderEx ''TestNull
+deriveBuilder ''BuilderEx ''TestOne
+deriveBuilder ''BuilderEx ''TestTwo
+deriveBuilder ''BuilderEx ''TestSum
+deriveBuilder ''BuilderEx ''TestRecord
+deriveBuilder ''BuilderEx ''TestNested
 
 g = maybe (putStrLn "built Nothing") (putStrLn . show) 
 

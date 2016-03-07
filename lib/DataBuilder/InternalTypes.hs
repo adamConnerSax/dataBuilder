@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FunctionalDependencies #-}
+--{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DefaultSignatures #-}
@@ -22,9 +22,10 @@ module DataBuilder.InternalTypes
   , FieldName
   , ConName
   , Metadata(..)
+  , setTypeName
+  , setmConName
+  , setmFieldName
   , typeOnlyMD
-  , HasMetadata(..)
-  , HasMetadataFields(..)
   , MDWrapped(..)
   , Buildable(..)
   , Builder(..)
@@ -44,45 +45,25 @@ type ConName = String
 
 data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName::Maybe FieldName} deriving (Show)
 
+setTypeName::TypeName->Metadata->Metadata
+setTypeName tn md = md { typeName = tn } 
+
+setmConName::Maybe ConName->Metadata->Metadata
+setmConName mcn md = md { conName = mcn } 
+
+setmFieldName::Maybe FieldName->Metadata->Metadata
+setmFieldName mfn md = md { fieldName = mfn } 
+
+
 typeOnlyMD::TypeName->Metadata
 typeOnlyMD tn = Metadata tn Nothing Nothing
 
-{-| We could use lenses for all this but that brings a lot of dependencies in where we had few. So we do it manually here. -}
-class HasMetadata a where
-  getMetadata::a->Metadata
-  setMetadata::Metadata->a->a
+data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::Metadata, value::f a }
 
-class HasMetadataFields a where
-  getTypeName::a->TypeName
-  setTypeName::a->TypeName->a
-  getmConName::a->Maybe ConName
-  setConName::a->ConName->a
-  getmFieldName::a->Maybe FieldName
-  setFieldName::a->FieldName->a
+mdwHasConName::MDWrapped f a->Bool
+mdwHasConName mdw = isJust (conName $ metadata mdw)
 
-instance HasMetadata Metadata where
-  getMetadata = id
-  setMetadata x _ = x
-
-instance HasMetadata a => HasMetadataFields a where
-  getTypeName = typeName . getMetadata
-  setTypeName mdh tn = setMetadata ((getMetadata mdh) { typeName = tn }) mdh
-  getmConName = conName . getMetadata
-  setConName mdh cn = setMetadata ((getMetadata mdh) { conName = Just cn }) mdh 
-  getmFieldName = fieldName . getMetadata
-  setFieldName mdh fn = setMetadata ((getMetadata mdh) { fieldName = Just fn }) mdh 
-
-
-data MDWrapped f g a = MDWrapped { hasDefault::Bool, metadataHolder::g, value::f a }
-
-instance HasMetadata g=>HasMetadata (MDWrapped f g a) where
-  getMetadata = getMetadata . metadataHolder
-  setMetadata md (MDWrapped hd mdh v) = let mdh' = setMetadata md mdh in MDWrapped hd mdh' v
-
-mdwHasConName::HasMetadata g=>MDWrapped f g a->Bool
-mdwHasConName mdw = isJust (getmConName mdw)
-
-buildersAllHaveConNames::HasMetadata g=>[MDWrapped f g a]->Bool
+buildersAllHaveConNames::[MDWrapped f a]->Bool
 buildersAllHaveConNames bes = not (any (not . mdwHasConName) bes)
 
 {-|
@@ -90,24 +71,24 @@ We don't get the Functor and applicative methods from those classes becuase we m
 in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic.  Though it needs to have equivalent
 functionality.
 -}
-class Buildable f g | f->g where
+class Buildable f where
   -- so we can derive the functor instance of the wrapped version
   bMap::(a->b) -> f a->f b
   -- inject and apply are exactly Applicative, inject=pure and apply=(<*>).
   bInject::a -> f a
   bApply::f (a->b) -> f a -> f b
   bFail::String->f a -- if there's a graceful way to handle errors...
-  bSum::[MDWrapped f g a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
+  bSum::[MDWrapped f a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
-class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g a where
-  gBuildM::(HasMetadata g,Buildable f g)=>g->Maybe a-> f a
+class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f a where
+  gBuildM::Buildable f=>Metadata->Maybe a-> f a
 
-class Builder f g a where
-  buildM::(HasMetadata g,Buildable f g)=>g->Maybe a-> f a
-  default buildM::(HasMetadata g, Buildable f g, GBuilder f g a)=>g->Maybe a-> f a
+class Builder f a where
+  buildM::Buildable f=>Metadata->Maybe a-> f a
+  default buildM::(Buildable f, GBuilder f a)=>Metadata->Maybe a-> f a
   buildM = gBuildM
 
-internalSum::(HasMetadata g, Buildable f g)=>[MDWrapped f g a]->f a
+internalSum::Buildable f=>[MDWrapped f a]->f a
 internalSum mdws = case length mdws of
   0 -> bFail "Internal error in DataBuilder.  No Constructors in Sum!"
   1 -> value (head mdws)
@@ -117,12 +98,12 @@ internalSum mdws = case length mdws of
 newtype FABuildable f a = FABuildable { unFA::f a }
 
 -- we don't expose the constructor but we do expose wrapBuildable.  That way we can only wrap if f is Buildable
-wrapBuildable::Buildable f g=>f a->FABuildable f a
+wrapBuildable::Buildable f=>f a->FABuildable f a
 wrapBuildable = FABuildable
 
-instance Buildable f g=>Functor (FABuildable f) where
+instance Buildable f=>Functor (FABuildable f) where
   fmap f x = FABuildable $ (bMap f) (unFA x)
 
-instance Buildable f g=>Applicative (FABuildable f) where
+instance Buildable f=>Applicative (FABuildable f) where
   pure x = FABuildable $ bInject x
   x <*> y = FABuildable $ (unFA x) `bApply` (unFA y)
