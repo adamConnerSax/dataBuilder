@@ -3,6 +3,8 @@
 module DataBuilder.TH
        (
          deriveBuilder
+       , handleNothingL
+       , handleJustL
        ) where
 
 import Language.Haskell.TH

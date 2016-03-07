@@ -24,12 +24,14 @@
 module DataBuilder.GenericSOP
        (
          module GSOP --re-export the Generics.SOP classes for deriving
+       , module Generics.SOP.TH
        )where
 
 import qualified GHC.Generics as GHC
 import Generics.SOP 
 import Generics.SOP as GSOP (Generic,HasDatatypeInfo)
 import Generics.SOP.Dict
+import Generics.SOP.TH (deriveGeneric)
 import qualified Data.Map as M
 import Data.Maybe (fromJust)
 --
