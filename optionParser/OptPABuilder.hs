@@ -21,9 +21,7 @@ makeOAParser::Builder Parser a=>Maybe a->Parser a
 makeOAParser = buildM (typeOnlyMD "")
 
 instance Buildable Parser where
-  bMap = fmap 
-  bInject = pure 
-  bApply = (<*>)
+  -- the other instances handled by default since Parser is applicative
   bFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
   bSum = sumToCommand
 

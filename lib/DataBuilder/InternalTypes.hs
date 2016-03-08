@@ -74,9 +74,17 @@ functionality.
 class Buildable f where
   -- so we can derive the functor instance of the wrapped version
   bMap::(a->b) -> f a->f b
+  default bMap::Functor f=>(a->b) -> f a -> f b
+  bMap = fmap
   -- inject and apply are exactly Applicative, inject=pure and apply=(<*>).
   bInject::a -> f a
+  default bInject::Applicative f=>a -> f a
+  bInject = pure
+
   bApply::f (a->b) -> f a -> f b
+  default bApply::Applicative f=>f (a->b) -> f a -> f b
+  bApply = (<*>)
+
   bFail::String->f a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
