@@ -34,20 +34,34 @@ getCons (TySynD _ _ (ConT n)) = lookupType n
 getCons (SigD _ (ConT n)) = lookupType n
 getCons x = unsupported ("type in getCons " ++ show x)
 
-typeShow :: Type -> Maybe String
-typeShow (ConT n) = Just $ toLower <$> nameBase n
-typeShow (VarT n) = Just $ toLower <$> nameBase n
-typeShow (TupleT n) = Just $ "tuple" ++ show n
-typeShow ListT = Just $ "[]"
-typeShow (AppT ListT t) = typeShow t >>= \x->Just ("listOf" ++ x) 
-typeShow (AppT t1 t2) = do
-  ts1 <- typeShow t1
-  ts2 <- typeShow t2
-  return $ (toLower <$> ts1) ++ ts2
-typeShow _ = Nothing
+typeVarName:: Type -> Maybe String
+typeVarName (ConT n) = Just $ toLower <$> nameBase n
+typeVarName (VarT n) = Just $ toLower <$> nameBase n
+typeVarName (TupleT n) = Just $ "tuple" ++ show n
+typeVarName ListT = Just $ "list"
+typeVarName (AppT ListT t) = typeVarName t >>= \x->Just ("listOf" ++ x) 
+typeVarName (AppT t1 t2) = do
+  ts1 <- typeVarName t1
+  ts2 <- typeVarName t2
+  return $ (toLower <$> ts1) ++ "_" ++ ts2
+typeVarName _ = Nothing
+
+typePretty :: Type -> Maybe String
+typePretty (ConT n) = Just $ nameBase n
+typePretty (VarT n) = Just $ nameBase n
+typePretty (TupleT n) = Just $ show n ++ "-tuple"
+typePretty ListT = Just $ "[]"
+typePretty (AppT ListT t) = typePretty t >>= \x->Just ("[" ++ x ++ "]") 
+typePretty (AppT t1 t2) = do
+  ts1 <- typePretty t1
+  ts2 <- typePretty t2
+  return $ ts1 ++ " " ++ ts2
+typePretty _ = Nothing
+
+
 
 typeNameE :: Type -> Q Exp
-typeNameE x = maybe (unsupported ("type in typeName " ++ show x)) sToE' (typeShow x)
+typeNameE x = maybe (unsupported ("type in typeName " ++ show x)) sToE' (typePretty x)
 
 lookupType :: Name -> Q [Con]
 lookupType n = do
@@ -133,7 +147,7 @@ buildBlankBuilder typeN mdE c = do
 buildCaseMatch::TypeName->Exp->Con->M.Map ConId ExpQ->Q Match
 buildCaseMatch typeN mdE c builderMap = do
   (n,tl,conMetaE,conFE,mdEs) <- builderPre typeN mdE c
-  ns <- mapM (\ty->newName $ fromJust (typeShow ty)) tl
+  ns <- mapM (\ty->newName $ fromJust (typeVarName ty)) tl
   let bldrs = map (appE [e|\(md,v)-> buildM md (Just v)|]) (zipE mdEs (varE <$> ns))
       bldr = foldl (\e1 e2 -> [e|bApply|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
       mdwE = [e|MDWrapped True $conMetaE $bldr|]
