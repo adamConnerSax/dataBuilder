@@ -18,7 +18,7 @@ import Language.Haskell.TH
 
 
 makeOAParser::Builder Parser a=>Maybe a->Parser a
-makeOAParser = buildM (typeOnlyMD "")
+makeOAParser = buildA (typeOnlyMD "")
 
 instance Buildable Parser where
   -- the other instances handled by default since Parser is applicative
@@ -41,27 +41,27 @@ parseReadable reader mHelp md ma =
     Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> (maybe mempty help mHelp))
 
 instance Builder Parser Int where
-  buildM = parseReadable auto (Just "Int")
+  buildA = parseReadable auto (Just "Int")
 
 instance Builder Parser Double where
-  buildM = parseReadable auto (Just "Double")
+  buildA = parseReadable auto (Just "Double")
 
 instance Builder Parser String where
-  buildM = parseReadable str (Just "String")
+  buildA = parseReadable str (Just "String")
 
 instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser e where
-  buildM md mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
+  buildA md mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
     fl = maybe flag' flag mE
     optDesc = maybe mempty help (fieldName md) 
 
 instance {-# OVERLAPPABLE #-} Builder Parser a=>Builder Parser (Maybe a) where
-  buildM md mmA = optional $ maybe (buildM md Nothing) (buildM md) mmA 
+  buildA md mmA = optional $ maybe (buildA md Nothing) (buildA md) mmA 
 
 deriveOABuilder::Name -> Q [Dec]
 deriveOABuilder typeName = do
   [d|instance Builder Parser $(conT typeName) where
-       buildM md Nothing  = $(handleNothingL typeName) md
-       buildM md (Just x) = $(handleJustL typeName) md x|]
+       buildA md Nothing  = $(handleNothingL typeName) md
+       buildA md (Just x) = $(handleJustL typeName) md x|]
 
 
 

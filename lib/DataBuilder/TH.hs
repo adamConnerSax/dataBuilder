@@ -73,8 +73,8 @@ lookupType n = do
 deriveBuilder::Name -> Name -> Q [Dec]
 deriveBuilder builderName typeName = do
   [d|instance Builder $(conT builderName) $(conT typeName) where
-       buildM md Nothing  = $(handleNothingL typeName) md
-       buildM md (Just x) = $(handleJustL typeName) md x|]
+       buildA md Nothing  = $(handleNothingL typeName) md
+       buildA md (Just x) = $(handleJustL typeName) md x|]
 
 handleNothingL::Name->Q Exp
 handleNothingL n = do
@@ -139,7 +139,7 @@ builderPre typeN mdE c = do
 buildBlankBuilder::TypeName->Exp->Con->Q Exp
 buildBlankBuilder typeN mdE c = do
   (n,tl,conMetaE,conFE,mdEs) <- builderPre typeN mdE c
-  let bldrs = map (appE [e|flip buildM Nothing|]) mdEs
+  let bldrs = map (appE [e|flip buildA Nothing|]) mdEs
       bldr = foldl (\e1 e2 -> [e|bApply|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
   [e|MDWrapped False $conMetaE $bldr|]
 
@@ -148,7 +148,7 @@ buildCaseMatch::TypeName->Exp->Con->M.Map ConId ExpQ->Q Match
 buildCaseMatch typeN mdE c builderMap = do
   (n,tl,conMetaE,conFE,mdEs) <- builderPre typeN mdE c
   ns <- mapM (\ty->newName $ fromJust (typeVarName ty)) tl
-  let bldrs = map (appE [e|\(md,v)-> buildM md (Just v)|]) (zipE mdEs (varE <$> ns))
+  let bldrs = map (appE [e|\(md,v)-> buildA md (Just v)|]) (zipE mdEs (varE <$> ns))
       bldr = foldl (\e1 e2 -> [e|bApply|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
       mdwE = [e|MDWrapped True $conMetaE $bldr|]
       newMap = M.insert (nameBase n) mdwE builderMap

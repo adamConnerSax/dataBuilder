@@ -71,7 +71,7 @@ simpleBuilder md (Just a) = BuilderEx $ do
 -- This is overlappable so that we can use the TH to derive this for things.
 -- Otherwise this covers all things since the constraints don't restrict matching.
 instance {-# OVERLAPPABLE #-} (Show a, Read a)=>Builder BuilderEx a where
-  buildM = simpleBuilder 
+  buildA = simpleBuilder 
 
 
 deriveBuilder ''BuilderEx ''TestNull
@@ -89,15 +89,15 @@ main = do
 
   putStrLn "Given:\ndata TestTwo=Two Int String\ndata TestRecord = TestR { intF::Int, stringF::String }\ndata TestSum = A | B Int | C Char Int | D Char Int Bool deriving (Show)\ndata TestNested = Nested Int String TestSum deriving (Show)"
   putStrLn "Build a TestTwo from Nothing"
-  bldr (buildM (typeOnlyMD "TestTwo") (Nothing :: Maybe TestTwo)) >>= g
+  bldr (buildA (typeOnlyMD "TestTwo") (Nothing :: Maybe TestTwo)) >>= g
   putStrLn "Build a TestTwo from a given value (=Two 11 \"Hola\")"
-  bldr (buildM (typeOnlyMD "TestTwo") (Just $ Two 11 "Hola")) >>= g
+  bldr (buildA (typeOnlyMD "TestTwo") (Just $ Two 11 "Hola")) >>= g
   putStrLn "Build a TestRecord from a given value (=TestR 11 \"Hola\")"
-  bldr (buildM (typeOnlyMD "TestRecord") (Just $ TestR 11 "Hola")) >>= g
+  bldr (buildA (typeOnlyMD "TestRecord") (Just $ TestR 11 "Hola")) >>= g
   putStrLn "Build a TestSum from a given value (=C 'a' 12)"
-  bldr (buildM (typeOnlyMD "TestSum") (Just $ C 'a' 12)) >>= g
+  bldr (buildA (typeOnlyMD "TestSum") (Just $ C 'a' 12)) >>= g
   putStrLn "Build a TestNested from Nothing"
-  bldr (buildM (typeOnlyMD "TestNested") (Nothing :: Maybe TestNested)) >>= g
+  bldr (buildA (typeOnlyMD "TestNested") (Nothing :: Maybe TestNested)) >>= g
   putStrLn "Build a TestNested from a value (=TestNested 12 \"Hello\" (D 'a' 2 (TestR 5 \"Adios\"))"
-  bldr (buildM (typeOnlyMD "TestNested") (Just (Nested 12 "Hello" (D 'a' 2 (TestR 5 "Adios"))))) >>= g
+  bldr (buildA (typeOnlyMD "TestNested") (Just (Nested 12 "Hello" (D 'a' 2 (TestR 5 "Adios"))))) >>= g
  

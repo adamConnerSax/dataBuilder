@@ -78,7 +78,7 @@ mdwMapFromList mdws = M.fromList $ zip ((fromJust . conName . metadata) <$> mdws
 type GBuilderTopC f a = (Buildable f, GenericSOPC a, All2 (Builder f) (Code a), All2 HasDatatypeInfo (Code a))
 
 instance GBuilderTopC f a=>GBuilder f a where
-  gBuildM md ma = case ma of
+  gBuildA md ma = case ma of
     Nothing -> internalSum $ buildBlanks md
     Just x  -> let cn = fromJust (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted md x) (buildBlankMap md)
 
@@ -119,11 +119,11 @@ buildBlank mdh tn ci =
     in case fieldNames of 
            Nothing ->
              let builder::Builder f a=>K DatatypeName a -> f a
-                 builder tn = buildM (setFromTypeName tn mdBase) Nothing
+                 builder tn = buildA (setFromTypeName tn mdBase) Nothing
              in hcliftA builderC builder typeNames
            Just fns -> 
              let builder::Builder f a=>FieldInfo a -> K DatatypeName a-> f a
-                 builder fi ktn = buildM (setTypeAndFieldNames ktn fi mdBase) Nothing
+                 builder fi ktn = buildA (setTypeAndFieldNames ktn fi mdBase) Nothing
              in hcliftA2 builderC builder fns typeNames
 
 buildDefaulted::forall f a.GBuilderTopC f a => Metadata->a->MDWrapped f a
@@ -150,11 +150,11 @@ buildDefFromConInfo md tn ci args =
   in case fieldNames of
       Nothing ->
         let builder::Builder f a=>K DatatypeName a -> I a -> f a
-            builder ktn ia = buildM (setFromTypeName ktn mdBase) (Just $ unI ia)
+            builder ktn ia = buildA (setFromTypeName ktn mdBase) (Just $ unI ia)
         in hcliftA2 builderC builder typeNames args
       Just fns ->
         let builder::Builder f a=>FieldInfo a->K DatatypeName a->I a->f a
-            builder fi ktn ia = buildM (setTypeAndFieldNames ktn fi mdBase) (Just (unI ia))
+            builder fi ktn ia = buildA (setTypeAndFieldNames ktn fi mdBase) (Just (unI ia))
         in hcliftA3 builderC builder fns typeNames args
 
 constructorName::forall a.GenericSOPC a=>a->Maybe ConName

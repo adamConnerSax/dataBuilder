@@ -89,12 +89,12 @@ class Buildable f where
   bSum::[MDWrapped f a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f a where
-  gBuildM::Buildable f=>Metadata->Maybe a-> f a
+  gBuildA::Buildable f=>Metadata->Maybe a-> f a
 
 class Builder f a where
-  buildM::Buildable f=>Metadata->Maybe a-> f a
-  default buildM::(Buildable f, GBuilder f a)=>Metadata->Maybe a-> f a
-  buildM = gBuildM
+  buildA::Buildable f=>Metadata->Maybe a-> f a
+  default buildA::(Buildable f, GBuilder f a)=>Metadata->Maybe a-> f a
+  buildA = gBuildA
 
 internalSum::Buildable f=>[MDWrapped f a]->f a
 internalSum mdws = case length mdws of
