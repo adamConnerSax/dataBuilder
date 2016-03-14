@@ -5,69 +5,63 @@
 {-# LANGUAGE TemplateHaskell #-}
 module OptPABuilder
        (
-         OPBOptions(..)
-       , OPBMDH
-       , typeOnlyOPBMDH
-       , buildM
-       , deriveBuilder
+         makeOAParser
+       , deriveOABuilder
        ) where
 
 import DataBuilder.Types
 import Data.Maybe (fromJust)
 import Data.Char (toLower)
 import Options.Applicative
-import DataBuilder.TH (deriveBuilder)
+import DataBuilder.TH (deriveBuilder,handleNothingL,handleJustL)
+import Language.Haskell.TH
 
-data OPBOptions = OPBOptions { showDefaults::Bool }
-data OPBMDH = OPBMDH { options::OPBOptions, metadata::Metadata }
 
-typeOnlyOPBMDH::OPBOptions->TypeName->OPBMDH
-typeOnlyOPBMDH op tn = OPBMDH op (typeOnlyMD tn)
+makeOAParser::Builder Parser a=>Maybe a->Parser a
+makeOAParser = buildM (typeOnlyMD "")
 
-sdOption (OPBMDH op _) = if (showDefaults op) then showDefault else mempty
-
-instance HasMetadata OPBMDH where
-  getMetadata = metadata
-  setMetadata md' (OPBMDH op _) = OPBMDH op md' 
-
-instance Buildable Parser OPBMDH where
-  bMap = fmap 
-  bInject = pure 
-  bApply = (<*>)
+instance Buildable Parser where
+  -- the other instances handled by default since Parser is applicative
   bFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
   bSum = sumToCommand
 
 -- derive a command parser from a sum-type
-sumToCommand::[MDWrapped Parser OPBMDH a]->Parser a
+sumToCommand::[MDWrapped Parser a]->Parser a
 sumToCommand mdws =
-  let makeCommand mdw = command (fromJust $ getmConName mdw) (info (DataBuilder.Types.value mdw) mempty)
+  let makeCommand mdw = command (fromJust . conName . metadata $ mdw) (info (DataBuilder.Types.value mdw) mempty)
   in subparser $ mconcat (map makeCommand mdws)
 
 --shortAndLong::HasName f=>String->Mod f a
 shortAndLong x = long x <> short (head x)
 
-parseReadable::(Read a,Show a)=>ReadM a->Maybe String->OPBMDH->Maybe a->Parser a
-parseReadable reader mHelp opbmdh ma =
-  case (fieldName . getMetadata $ opbmdh) of
+parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Metadata->Maybe a->Parser a
+parseReadable reader mHelp md ma =
+  case (fieldName md) of
     Nothing->argument reader ((maybe mempty Options.Applicative.value ma) <> (maybe mempty help mHelp))
-    Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> sdOption opbmdh <> (maybe mempty help mHelp))
+    Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> (maybe mempty help mHelp))
 
-instance Builder Parser OPBMDH Int where
+instance Builder Parser Int where
   buildM = parseReadable auto (Just "Int")
 
-instance Builder Parser OPBMDH Double where
+instance Builder Parser Double where
   buildM = parseReadable auto (Just "Double")
 
-instance Builder Parser OPBMDH String where
+instance Builder Parser String where
   buildM = parseReadable str (Just "String")
 
-instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser OPBMDH e where
-  buildM opbmdh mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)) <> sdOption opbmdh)) [minBound :: e..] where
+instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser e where
+  buildM md mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
     fl = maybe flag' flag mE
-    optDesc = maybe mempty help (fieldName . getMetadata $ opbmdh) 
+    optDesc = maybe mempty help (fieldName md) 
 
-instance {-# OVERLAPPABLE #-} Builder Parser OPBMDH a=>Builder Parser OPBMDH (Maybe a) where
-  buildM opbmdh mmA = optional $ maybe (buildM opbmdh Nothing) (buildM opbmdh) mmA 
+instance {-# OVERLAPPABLE #-} Builder Parser a=>Builder Parser (Maybe a) where
+  buildM md mmA = optional $ maybe (buildM md Nothing) (buildM md) mmA 
+
+deriveOABuilder::Name -> Q [Dec]
+deriveOABuilder typeName = do
+  [d|instance Builder Parser $(conT typeName) where
+       buildM md Nothing  = $(handleNothingL typeName) md
+       buildM md (Just x) = $(handleJustL typeName) md x|]
 
 
 

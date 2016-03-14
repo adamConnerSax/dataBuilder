@@ -4,10 +4,11 @@ module DataBuilder.Types
        , FieldName
        , ConName
        , Metadata(typeName,conName,fieldName)
+       , setTypeName
+       , setmConName
+       , setmFieldName
        , typeOnlyMD
-       , HasMetadata(..)
-       , HasMetadataFields(..)
-       , MDWrapped(hasDefault,metadataHolder,value)
+       , MDWrapped(hasDefault,metadata,value)
        , Buildable(..)
        , Builder(..)
        ) where
