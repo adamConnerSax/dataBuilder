@@ -29,7 +29,6 @@ module DataBuilder.InternalTypes
   , MDWrapped(..)
   , Buildable(..)
   , Builder(..)
-  , BuilderTransform(..)
     -- * Not exposed outside the library
   , internalSum
   , wrapBuildable
@@ -92,14 +91,10 @@ class Buildable f where
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f a where
   gBuildA::Buildable f=>Metadata->Maybe a-> f a
 
-class BuilderTransform f a where
-  transform::f a -> f a
-  transform = id
-
 class Builder f a where
   buildA::Buildable f=>Metadata->Maybe a-> f a
-  default buildA::(Buildable f, GBuilder f a, BuilderTransform f a)=>Metadata->Maybe a-> f a
-  buildA md ma = transform $ gBuildA md ma
+  default buildA::(Buildable f, GBuilder f a)=>Metadata->Maybe a-> f a
+  buildA = gBuildA
 
 internalSum::Buildable f=>[MDWrapped f a]->f a
 internalSum mdws = case length mdws of

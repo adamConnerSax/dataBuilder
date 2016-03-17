@@ -26,8 +26,6 @@ instance Buildable Parser where
   bFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
   bSum = sumToCommand
 
-instance BuilderTransform Parser a
-
 -- derive a command parser from a sum-type
 sumToCommand::[MDWrapped Parser a]->Parser a
 sumToCommand mdws =

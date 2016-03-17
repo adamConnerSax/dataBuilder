@@ -11,7 +11,6 @@ module DataBuilder.Types
        , MDWrapped(hasDefault,metadata,value)
        , Buildable(..)
        , Builder(..)
-       , BuilderTransform(..)
        ) where
 
 import DataBuilder.InternalTypes
