@@ -17,6 +17,7 @@ import DataBuilder.TH (deriveBuilder,handleNothingL,handleJustL)
 import Language.Haskell.TH
 
 
+
 makeOAParser::Builder Parser a=>Maybe a->Parser a
 makeOAParser = buildA (typeOnlyMD "")
 
@@ -24,6 +25,8 @@ instance Buildable Parser where
   -- the other instances handled by default since Parser is applicative
   bFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
   bSum = sumToCommand
+
+instance BuilderTransform Parser a
 
 -- derive a command parser from a sum-type
 sumToCommand::[MDWrapped Parser a]->Parser a
