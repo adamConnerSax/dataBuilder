@@ -21,7 +21,7 @@ data Process = AProcess | BProcess deriving (Show,Enum,Bounded,GHCG.Generic)
 instance Generic Process
 instance HasDatatypeInfo Process
 
---data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,GHCG.Generic)
+data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process } deriving (Show,GHCG.Generic)
 
 
 -- Also supports commands automatically if you derive the builder for a sum type
@@ -30,7 +30,7 @@ instance Generic Commands
 instance HasDatatypeInfo Commands
 instance Builder Parser Commands -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
 
-data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show,GHCG.Generic)
+--data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show,GHCG.Generic)
 --deriveBuilder ''Parser ''Commands
 
 
@@ -45,7 +45,7 @@ deriveOABuilder ''Config --uses TH to build the instance.  Then you do not need 
 
 main::IO ()
 main = (execParser $ info (helper <*> parser) infoMod) >>= print where
---  parser = buildA (typeOnlyMD "Config") (Just $ configDefault) -- supplies defaults for everything
+  parser = makeOAParser (Just $ configDefault) -- supplies defaults for everything
   configDefault = Config "Hello" Nothing (Just Verbose) AProcess
   infoMod = fullDesc <> progDesc "Sample use of DataBuilder to create a parser from a data type"
-  parser = makeOAParser (Nothing :: Maybe Config) -- no defaults
+--  parser = makeOAParser (Nothing :: Maybe Config) -- no defaults
