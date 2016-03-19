@@ -54,21 +54,7 @@ ci2md mf tn ci = K $ (ci2name ci,mf)
 gMakeMDs::SListI2 xss=>Maybe FieldName->DatatypeName->NP ConstructorInfo xss ->[(ConName,Maybe FieldName)]
 gMakeMDs mf tn cs = hcollapse $ hliftA (ci2md mf tn) cs
 
-
 type GenericSOPC a = (Generic a, HasDatatypeInfo a)
---type BuildableC f = Buildable f 
-{-
-setFromFieldInfo::forall a.FieldInfo a->Metadata->Metadata
-setFromFieldInfo fi md = let (FieldInfo fName) = fi in setmFieldName (Just fName) md
-
-setFromTypeName::forall a.K DatatypeName a->Metadata->Metadata
-setFromTypeName tn md = setTypeName (unK tn) md
-
-setTypeAndFieldNames::forall a.K DatatypeName a->FieldInfo a->Metadata->Metadata
-setTypeAndFieldNames tn fi md = setFromFieldInfo fi . setFromTypeName tn $ md
--}
---setmConName::forall a g.HasMetadata g=>Maybe ConName->g->g
---setmConName mcn mdh = setMetadata (Metadata (getTypeName $ getMetadata mdh) mcn (getmFieldName $ getMetadata mdh)) mdh
 
 fi2mf::FieldInfo a->Maybe FieldName
 fi2mf (FieldInfo x) = Just x
