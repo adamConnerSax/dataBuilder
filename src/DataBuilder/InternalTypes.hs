@@ -18,14 +18,14 @@ This module contains basic types and typeclasses for the package.
 
 module DataBuilder.InternalTypes
   (
-    TypeName
-  , FieldName
+--    TypeName
+    FieldName
   , ConName
-  , Metadata(..)
-  , setTypeName
-  , setmConName
-  , setmFieldName
-  , typeOnlyMD
+--  , Metadata(..)
+--  , setTypeName
+--  , setmConName
+--  , setmFieldName
+--  , typeOnlyMD
   , MDWrapped(..)
   , Buildable(..)
   , Builder(..)
@@ -39,10 +39,11 @@ module DataBuilder.InternalTypes
 import Data.Maybe (isJust)
 import qualified Generics.SOP as GSOP
 
-type TypeName = String
+
 type FieldName = String
 type ConName = String
-
+{-
+type TypeName = String
 data Metadata = Metadata { typeName::TypeName, conName::Maybe ConName, fieldName::Maybe FieldName} deriving (Show)
 
 setTypeName::TypeName->Metadata->Metadata
@@ -57,14 +58,18 @@ setmFieldName mfn md = md { fieldName = mfn }
 
 typeOnlyMD::TypeName->Metadata
 typeOnlyMD tn = Metadata tn Nothing Nothing
+-}
 
-data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::Metadata, value::f a }
 
+data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::f a }
+
+{-
 mdwHasConName::MDWrapped f a->Bool
 mdwHasConName mdw = isJust (conName $ metadata mdw)
 
 buildersAllHaveConNames::[MDWrapped f a]->Bool
 buildersAllHaveConNames bes = not (any (not . mdwHasConName) bes)
+-}
 
 {-|
 We don't get the Functor and applicative methods from those classes becuase we may want to use this
@@ -89,19 +94,18 @@ class Buildable f where
   bSum::[MDWrapped f a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f a where
-  gBuildA::Buildable f=>Metadata->Maybe a-> f a
+  gBuildA::Buildable f=>Maybe FieldName->Maybe a-> f a
 
 class Builder f a where
-  buildA::Buildable f=>Metadata->Maybe a-> f a
-  default buildA::(Buildable f, GBuilder f a)=>Metadata->Maybe a-> f a
+  buildA::Buildable f=>Maybe FieldName->Maybe a-> f a
+  default buildA::(Buildable f, GBuilder f a)=>Maybe FieldName->Maybe a-> f a
   buildA = gBuildA
 
 internalSum::Buildable f=>[MDWrapped f a]->f a
 internalSum mdws = case length mdws of
   0 -> bFail "Internal error in DataBuilder.  No Constructors in Sum!"
   1 -> value (head mdws)
-  _ -> if buildersAllHaveConNames mdws then bSum mdws else bFail "Sum type encountered but constructor name(s) are missing."
-
+  _ -> bSum mdws
 
 newtype FABuildable f a = FABuildable { unFA::f a }
 

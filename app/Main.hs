@@ -40,14 +40,14 @@ instance Buildable BuilderEx where
 -- the only tricky part.  How to handle sum types?
 sumBEs::[MDWrapped BuilderEx a]->BuilderEx a
 sumBEs mdws = BuilderEx $ do
-  let starDefault mdw = fromJust (conName $ metadata mdw) ++ if hasDefault mdw then "*" else ""
+  let starDefault mdw = (fst $ metadata mdw) ++ if hasDefault mdw then "*" else ""
       conNames = map starDefault mdws
       names = intercalate "," conNames
       prompt = "Type has multiple constructors. Please choose (" ++ names ++ "): "
   putStr prompt
   hFlush stdout
   chosen <- getLine
-  let mMDW = find (\mdw -> chosen == (fromJust . conName . metadata $ mdw)) mdws
+  let mMDW = find (\mdw -> chosen == (fst . metadata $ mdw)) mdws
   case mMDW of
     Nothing -> bldr $ bFail (chosen ++ " unrecognized constructor!")
     Just mdw -> bldr $ value mdw
@@ -55,15 +55,15 @@ sumBEs mdws = BuilderEx $ do
 
 -- You need base case builders in order to build at least primitive types
 -- In general you would also need to handle lists, maps or traversables in general
-simpleBuilder::(Show a, Read a)=>Metadata->Maybe a->BuilderEx a 
-simpleBuilder md Nothing = BuilderEx $ do
-  let prompt = (maybe "" (\x->x++"::") (fieldName md)) ++ (typeName md) ++ ": " 
+simpleBuilder::(Show a, Read a)=>Maybe FieldName->Maybe a->BuilderEx a 
+simpleBuilder mf Nothing = BuilderEx $ do
+  let prompt = (maybe "" id mf) ++ ": " 
   putStr prompt
   hFlush stdout
   (readMaybe <$> getLine)
 
-simpleBuilder md (Just a) = BuilderEx $ do
-  let prompt = (maybe "" (\x->x++"::") (fieldName md)) ++ (typeName md) ++ " (was " ++ show a ++ "): "
+simpleBuilder mf (Just a) = BuilderEx $ do
+  let prompt = (maybe "" id mf) ++ " (was " ++ show a ++ "): "
   putStr prompt
   hFlush stdout
   (readMaybe <$> getLine)
@@ -89,15 +89,15 @@ main = do
 
   putStrLn "Given:\ndata TestTwo=Two Int String\ndata TestRecord = TestR { intF::Int, stringF::String }\ndata TestSum = A | B Int | C Char Int | D Char Int Bool deriving (Show)\ndata TestNested = Nested Int String TestSum deriving (Show)"
   putStrLn "Build a TestTwo from Nothing"
-  bldr (buildA (typeOnlyMD "TestTwo") (Nothing :: Maybe TestTwo)) >>= g
+  bldr (buildA Nothing (Nothing :: Maybe TestTwo)) >>= g
   putStrLn "Build a TestTwo from a given value (=Two 11 \"Hola\")"
-  bldr (buildA (typeOnlyMD "TestTwo") (Just $ Two 11 "Hola")) >>= g
+  bldr (buildA Nothing (Just $ Two 11 "Hola")) >>= g
   putStrLn "Build a TestRecord from a given value (=TestR 11 \"Hola\")"
-  bldr (buildA (typeOnlyMD "TestRecord") (Just $ TestR 11 "Hola")) >>= g
+  bldr (buildA Nothing (Just $ TestR 11 "Hola")) >>= g
   putStrLn "Build a TestSum from a given value (=C 'a' 12)"
-  bldr (buildA (typeOnlyMD "TestSum") (Just $ C 'a' 12)) >>= g
+  bldr (buildA Nothing (Just $ C 'a' 12)) >>= g
   putStrLn "Build a TestNested from Nothing"
-  bldr (buildA (typeOnlyMD "TestNested") (Nothing :: Maybe TestNested)) >>= g
+  bldr (buildA Nothing (Nothing :: Maybe TestNested)) >>= g
   putStrLn "Build a TestNested from a value (=TestNested 12 \"Hello\" (D 'a' 2 (TestR 5 \"Adios\"))"
-  bldr (buildA (typeOnlyMD "TestNested") (Just (Nested 12 "Hello" (D 'a' 2 (TestR 5 "Adios"))))) >>= g
+  bldr (buildA Nothing (Just (Nested 12 "Hello" (D 'a' 2 (TestR 5 "Adios"))))) >>= g
  

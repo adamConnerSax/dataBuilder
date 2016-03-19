@@ -1,13 +1,7 @@
 module DataBuilder.Types
        (
-         TypeName
-       , FieldName
+         FieldName
        , ConName
-       , Metadata(typeName,conName,fieldName)
-       , setTypeName
-       , setmConName
-       , setmFieldName
-       , typeOnlyMD
        , MDWrapped(hasDefault,metadata,value)
        , Buildable(..)
        , Builder(..)
