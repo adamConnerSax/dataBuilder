@@ -126,7 +126,7 @@ builderPre::Exp->Con->Q (Name,[Type],ExpQ,ExpQ,[ExpQ])
 builderPre mfE c = do
   (n,tl,mFNs) <- conNameAndTypes c
   let conMetaE = tupE [sToE' $ nameBase n,return mfE] 
-      conFE = [e|bInject $(conE n)|]
+      conFE = [e|pure $(conE n)|]
       mfEs = case mFNs of
         Nothing -> take (length tl) $ repeat [e|Nothing|] 
         Just fnames -> map (appE [e|Just|] . sToE' . nameBase) fnames
@@ -136,7 +136,7 @@ buildBlankBuilder::Exp->Con->Q Exp
 buildBlankBuilder mfE c = do
   (n,tl,conMetaE,conFE,mfEs) <- builderPre mfE c
   let bldrs = map (appE [e|flip buildA Nothing|]) mfEs
-      bldr = foldl (\e1 e2 -> [e|bApply|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
+      bldr = foldl (\e1 e2 -> [e|(<*>)|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
   [e|MDWrapped False $conMetaE $bldr|]
 
 
@@ -145,7 +145,7 @@ buildCaseMatch mfE c builderMap = do
   (n,tl,conMetaE,conFE,mfEs) <- builderPre mfE c
   ns <- mapM (\ty->newName $ fromJust (typeVarName ty)) tl
   let bldrs = map (appE [e|\(mf,v)-> buildA mf (Just v)|]) (zipE mfEs (varE <$> ns))
-      bldr = foldl (\e1 e2 -> [e|bApply|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
+      bldr = foldl (\e1 e2 -> [e|(<*>)|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
       mdwE = [e|MDWrapped True $conMetaE $bldr|]
       newMap = M.insert (nameBase n) mdwE builderMap
       summedE = [e|internalSum $(listE . snd . unzip . M.toList $ newMap)|]

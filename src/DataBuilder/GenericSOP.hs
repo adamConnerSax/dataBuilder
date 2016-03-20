@@ -84,20 +84,20 @@ buildBlanks mf =
           ADT _ tn cs -> (tn,cs)
           Newtype _ tn c -> (tn,(c :* Nil))
         mds = gMakeMDs mf tn cs
-        builders = (unFA . fmap to) <$> buildBlanks' mf tn cs
+        builders = fmap to <$> buildBlanks' mf tn cs
         mbs = zip mds builders
         makeMDW (md',bldr) = MDWrapped False md' bldr
     in makeMDW <$> mbs
 
 --type All2C f xss = (All2 (Builder f) xss)
 type GBuilderC2 f xss = (Buildable f, All2 (Builder f) xss, SListI2 xss)
-buildBlanks'::forall f xss.GBuilderC2 f xss => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[(FABuildable f) (SOP I xss)]
+buildBlanks'::forall f xss.GBuilderC2 f xss => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[f (SOP I xss)]
 buildBlanks' mf tn cs =
   let allBuilder = Proxy :: Proxy (All (Builder f))
       pop = POP $ hcliftA allBuilder (buildBlank mf tn) cs
-      wrapped = hliftA wrapBuildable pop -- POP (FABuildable f) xss
-      sop = apInjs_POP wrapped -- [SOP (FABuildable f) xss]
-  in hsequence <$> sop -- [(FABuildable f) (SOP I xss)]
+--      wrapped = hliftA wrapBuildable pop -- POP (FABuildable f) xss
+      sop = apInjs_POP pop -- [SOP f xss]
+  in hsequence <$> sop -- [f (SOP I xss)]
 
 
 type GBuilderC1 f xs  = (Buildable f, All (Builder f) xs, SListI xs)
@@ -122,8 +122,8 @@ buildDefaulted mf a =
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
       sopf   = SOP $ hcliftA2 allBuilder (buildDefFromConInfo mf tn) cs (unSOP $ from a) -- SOP f xss
-      sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
-      fa = unFA $ (fmap to) . hsequence $ sopFAf                                           -- f a
+--      sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
+      fa = fmap to . hsequence $ sopf                                           -- f a
   in MDWrapped True (cn,mf) fa
 
 

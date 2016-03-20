@@ -1,8 +1,9 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoMonomorphismRestriction #-} --just for demo.  Allows polymorphic result printer
+
 
 module Main where
 
@@ -21,18 +22,17 @@ data TestSum = A | B Int | C Char Int | D Char Int TestRecord deriving (Show)
 data TestNested = Nested Int String TestSum deriving (Show)
 
 
-newtype BuilderEx a = BuilderEx { bldr::IO (Maybe a) }
+newtype BuilderEx a = BuilderEx { unBldr::IO (Maybe a) } deriving (Functor)
 
-instance Functor BuilderEx where
-  fmap f bea = BuilderEx $ (fmap f) <$> bldr bea
+
+instance Applicative BuilderEx where
+  pure x = BuilderEx $ return $ Just x
+  bf <*> ba = BuilderEx $ do
+    mf <- unBldr bf
+    ma <- unBldr ba
+    return $ mf <*> ma
 
 instance Buildable BuilderEx where
-  bMap = fmap 
-  bInject x = BuilderEx $ return (Just x)
-  bApply bAB bA = BuilderEx $ do
-    mAB <- (bldr bAB)
-    mA <-  (bldr bA)
-    return $ mAB <*> mA
   bFail msg = BuilderEx $ putStrLn msg >> return Nothing 
   bSum = sumBEs
 
@@ -49,8 +49,8 @@ sumBEs mdws = BuilderEx $ do
   chosen <- getLine
   let mMDW = find (\mdw -> chosen == (fst . metadata $ mdw)) mdws
   case mMDW of
-    Nothing -> bldr $ bFail (chosen ++ " unrecognized constructor!")
-    Just mdw -> bldr $ value mdw
+    Nothing -> unBldr $ bFail (chosen ++ " unrecognized constructor!")
+    Just mdw -> unBldr $ value mdw
 
 
 -- You need base case builders in order to build at least primitive types
@@ -81,6 +81,7 @@ deriveBuilder ''BuilderEx ''TestSum
 deriveBuilder ''BuilderEx ''TestRecord
 deriveBuilder ''BuilderEx ''TestNested
 
+g::Show a=>Maybe a->IO ()
 g = maybe (putStrLn "built Nothing") (putStrLn . show) 
 
 
@@ -89,15 +90,15 @@ main = do
 
   putStrLn "Given:\ndata TestTwo=Two Int String\ndata TestRecord = TestR { intF::Int, stringF::String }\ndata TestSum = A | B Int | C Char Int | D Char Int Bool deriving (Show)\ndata TestNested = Nested Int String TestSum deriving (Show)"
   putStrLn "Build a TestTwo from Nothing"
-  bldr (buildA Nothing (Nothing :: Maybe TestTwo)) >>= g
+  unBldr (buildA Nothing (Nothing :: Maybe TestTwo)) >>= g
   putStrLn "Build a TestTwo from a given value (=Two 11 \"Hola\")"
-  bldr (buildA Nothing (Just $ Two 11 "Hola")) >>= g
+  unBldr (buildA Nothing (Just $ Two 11 "Hola")) >>= g
   putStrLn "Build a TestRecord from a given value (=TestR 11 \"Hola\")"
-  bldr (buildA Nothing (Just $ TestR 11 "Hola")) >>= g
+  unBldr (buildA Nothing (Just $ TestR 11 "Hola")) >>= g
   putStrLn "Build a TestSum from a given value (=C 'a' 12)"
-  bldr (buildA Nothing (Just $ C 'a' 12)) >>= g
+  unBldr (buildA Nothing (Just $ C 'a' 12)) >>= g
   putStrLn "Build a TestNested from Nothing"
-  bldr (buildA Nothing (Nothing :: Maybe TestNested)) >>= g
+  unBldr (buildA Nothing (Nothing :: Maybe TestNested)) >>= g
   putStrLn "Build a TestNested from a value (=TestNested 12 \"Hello\" (D 'a' 2 (TestR 5 \"Adios\"))"
-  bldr (buildA Nothing (Just (Nested 12 "Hello" (D 'a' 2 (TestR 5 "Adios"))))) >>= g
+  unBldr (buildA Nothing (Just (Nested 12 "Hello" (D 'a' 2 (TestR 5 "Adios"))))) >>= g
  

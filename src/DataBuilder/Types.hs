@@ -5,6 +5,7 @@ module DataBuilder.Types
        , MDWrapped(hasDefault,metadata,value)
        , Buildable(..)
        , Builder(..)
+       , GBuilder(..)
        ) where
 
 import DataBuilder.InternalTypes
