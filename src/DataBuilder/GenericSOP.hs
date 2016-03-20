@@ -1,6 +1,4 @@
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -149,30 +147,4 @@ constructorName a =
       getConName::ConstructorInfo xs->NP I xs->K ConName xs
       getConName ci args = K $ ci2name ci
   in hcollapse $ hliftA2 getConName cs (unSOP $ from a)
-
-{-
-gTypeName::forall a.HasDatatypeInfo a=>K DatatypeName a
-gTypeName = case datatypeInfo (Proxy :: Proxy a) of
-  ADT _ tn _ -> K tn
-  Newtype _ tn _ -> K tn
-
-gTypeNames::forall xs.(All HasDatatypeInfo xs, SListI xs)=>NP (K DatatypeName) xs
-gTypeNames = hcpure (Proxy :: Proxy HasDatatypeInfo) gTypeName 
--}
-
-{- Generic and HasDatatypeInfo instances for a bunch of basic types -}
-instance Generic Int
-instance HasDatatypeInfo Int
-
-instance Generic Float
-instance HasDatatypeInfo Float
-
-instance Generic Double
-instance HasDatatypeInfo Double
-
---instance Generic String
---instance HasDatatypeInfo String
-
-instance Generic Char
-instance HasDatatypeInfo Char
 

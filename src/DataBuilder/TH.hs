@@ -1,5 +1,17 @@
 {-# LANGUAGE TemplateHaskell #-}
-
+-----------------------------------------------------------------------------
+--
+-- Module      :  DataBuilder.TH
+-- Copyright   :  2016 Adam Conner-Sax
+-- License     :  BSD3
+--
+-- Maintainer  :  adam_conner_sax@yahoo.com
+-- Stability   :
+-- Portability :
+--
+-- |
+--
+-----------------------------------------------------------------------------
 module DataBuilder.TH
        (
          deriveBuilder

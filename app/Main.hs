@@ -70,7 +70,7 @@ simpleBuilder mf (Just a) = BuilderEx $ do
 
 -- This is overlappable so that we can use the TH to derive this for things.
 -- Otherwise this covers all things since the constraints don't restrict matching.
-instance {-# OVERLAPPABLE #-} (Show a, Read a)=>Builder BuilderEx a where
+instance {-# OVERLAPPABLE #-}(Show a, Read a)=>Builder BuilderEx a where
   buildA = simpleBuilder 
 
 

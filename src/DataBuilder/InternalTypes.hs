@@ -1,21 +1,18 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
---{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DefaultSignatures #-}
-
-{-|
-Module: DataBuilder.InternalTypes
-Description: Types and TypeClasses for DataBuilder package
-Copyright: (c) Adam Conner-Sax 2016
-License: BSD3
-Maintainer: adam_conner_sax@yahoo.com
-
-This module contains basic types and typeclasses for the package.
--}
-
+-----------------------------------------------------------------------------
+--
+-- Module      :  DataBuilder.InternalTypes
+-- Copyright   :  2016 Adam Conner-Sax
+-- License     :  BSD3
+--
+-- Maintainer  :  adam_conner_sax@yahoo.com
+-- Stability   :
+-- Portability :
+--
+-- |
+--
+-----------------------------------------------------------------------------
 module DataBuilder.InternalTypes
   (
     FieldName
@@ -26,8 +23,6 @@ module DataBuilder.InternalTypes
   , GBuilder(..)
     -- * Not exposed outside the library
   , internalSum
---  , wrapBuildable
---  , FABuildable(unFA)
   ) where
 
 import Data.Maybe (isJust)
