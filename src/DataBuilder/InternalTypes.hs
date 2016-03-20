@@ -60,18 +60,3 @@ internalSum mdws = case length mdws of
   0 -> bFail "Internal error in DataBuilder.  No Constructors in Sum!"
   1 -> value (head mdws)
   _ -> bSum mdws
-
-{-
-newtype FABuildable f a = FABuildable { unFA::f a }
-
--- we don't expose the constructor but we do expose wrapBuildable.  That way we can only wrap if f is Buildable
-wrapBuildable::Buildable f=>f a->FABuildable f a
-wrapBuildable = FABuildable
-
-instance Buildable f=>Functor (FABuildable f) where
-  fmap f x = FABuildable $ (bMap f) (unFA x)
-
-instance Buildable f=>Applicative (FABuildable f) where
-  pure x = FABuildable $ bInject x
-  x <*> y = FABuildable $ (unFA x) `bApply` (unFA y)
--}
