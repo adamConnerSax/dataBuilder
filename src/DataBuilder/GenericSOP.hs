@@ -28,7 +28,6 @@ module DataBuilder.GenericSOP
 import qualified GHC.Generics as GHC
 import Generics.SOP hiding (FieldName)
 import Generics.SOP as GSOP (Generic,HasDatatypeInfo)
-import Generics.SOP.Dict
 import Generics.SOP.TH (deriveGeneric)
 import qualified Data.Map as M
 import Data.Maybe (fromJust)
