@@ -21,6 +21,7 @@ module DataBuilder.InternalTypes
   , Buildable(..)
   , Builder(..)
   , GBuilder(..)
+  , buildAFromConList
     -- * Not exposed outside the library
   , internalSum
   ) where
@@ -49,6 +50,9 @@ class Builder f a where
   buildA::Buildable f=>Maybe FieldName->Maybe a-> f a
   default buildA::(Buildable f, GBuilder f a)=>Maybe FieldName->Maybe a-> f a
   buildA = gBuildA
+
+buildAFromConList::Buildable f=>[(Maybe FieldName->Maybe a->MDWrapped f a)]->Maybe FieldName->Maybe a->f a
+buildAFromConList conList mFN ma = internalSum $ fmap (\f->f mFN ma) conList
 
 internalSum::Buildable f=>[MDWrapped f a]->f a
 internalSum mdws = case length mdws of
