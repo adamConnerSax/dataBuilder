@@ -18,7 +18,7 @@ class Applicative f=>Buildable f where
   bSum::[MDWrapped f g a]->f a -- this only gets called if the list length (actual sum type).  If you have 0 or > 1 but are missing a constructor, bFail is called.
 
 class Builder f a where
-  buildM::Buildable f g=>g->Maybe a-> f a
+  buildM::Buildable f=>Maybe a-> f a
 
 
 ```
