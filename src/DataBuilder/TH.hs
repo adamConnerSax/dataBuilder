@@ -19,12 +19,12 @@ module DataBuilder.TH
        , handleJustL
        ) where
 
-import Language.Haskell.TH
-import qualified Data.Map as M
+import qualified Data.Map                  as M
+import           Language.Haskell.TH
 
-import Data.Char (toLower)
-import Data.Maybe (fromJust)
-import DataBuilder.InternalTypes
+import           Data.Char                 (toLower)
+import           Data.Maybe                (fromJust)
+import           DataBuilder.InternalTypes
 
 type ConId = ConName
 
@@ -40,8 +40,8 @@ conNameAndTypes (InfixC (_,t) n (_,t')) = return (n, [t,t'], Nothing)
 --ForallC.  We could extract name and types but not sure we'd know how to apply them??
 conNameAndTypes c = unsupported ("constructor type in conNameAndTypes (" ++ show c ++ ")")
 
-getCons (DataD _ _ _ c _) = return c
-getCons (NewtypeD _ _ _ c _) = return [c]
+getCons (DataD _ _ _ _ c _) = return c
+getCons (NewtypeD _ _ _ _ c _) = return [c]
 getCons (TySynD _ _ (ConT n)) = lookupType n
 getCons (SigD _ (ConT n)) = lookupType n
 getCons x = unsupported ("type in getCons " ++ show x)
@@ -51,7 +51,7 @@ typeVarName (ConT n) = Just $ toLower <$> nameBase n
 typeVarName (VarT n) = Just $ toLower <$> nameBase n
 typeVarName (TupleT n) = Just $ "tuple" ++ show n
 typeVarName ListT = Just $ "list"
-typeVarName (AppT ListT t) = typeVarName t >>= \x->Just ("listOf" ++ x) 
+typeVarName (AppT ListT t) = typeVarName t >>= \x->Just ("listOf" ++ x)
 typeVarName (AppT t1 t2) = do
   ts1 <- typeVarName t1
   ts2 <- typeVarName t2
@@ -63,7 +63,7 @@ typePretty (ConT n) = Just $ nameBase n
 typePretty (VarT n) = Just $ nameBase n
 typePretty (TupleT n) = Just $ show n ++ "-tuple"
 typePretty ListT = Just $ "[]"
-typePretty (AppT ListT t) = typePretty t >>= \x->Just ("[" ++ x ++ "]") 
+typePretty (AppT ListT t) = typePretty t >>= \x->Just ("[" ++ x ++ "]")
 typePretty (AppT t1 t2) = do
   ts1 <- typePretty t1
   ts2 <- typePretty t2
@@ -137,10 +137,10 @@ zipE e1s e2s = (tupE . (\(x,y)->[x,y])) <$> (zip e1s e2s)
 builderPre::Exp->Con->Q (Name,[Type],ExpQ,ExpQ,[ExpQ])
 builderPre mfE c = do
   (n,tl,mFNs) <- conNameAndTypes c
-  let conMetaE = tupE [sToE' $ nameBase n,return mfE] 
+  let conMetaE = tupE [sToE' $ nameBase n,return mfE]
       conFE = [e|pure $(conE n)|]
       mfEs = case mFNs of
-        Nothing -> take (length tl) $ repeat [e|Nothing|] 
+        Nothing -> take (length tl) $ repeat [e|Nothing|]
         Just fnames -> map (appE [e|Just|] . sToE' . nameBase) fnames
   return (n,tl,conMetaE,conFE,mfEs)
 
