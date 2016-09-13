@@ -18,6 +18,9 @@ module DataBuilder.InternalTypes
     FieldName
   , ConName
   , MDWrapped(..)
+  , FValidation(..)
+  , Validator
+  , allValid
   , Buildable(..)
   , Builder(..)
   , GBuilder(..)
@@ -27,34 +30,57 @@ module DataBuilder.InternalTypes
   ) where
 
 import Data.Maybe (isJust)
+import Data.Validation (Validation(..))
+import Data.Semigroup (Semigroup,(<>))
+
 import qualified Generics.SOP as GSOP
 
 type FieldName = String
 type ConName = String
 
-data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::f a }
+newtype FValidation f err a = FValidation { unFValidation::f (Validation err a) }
+
+instance Functor f => Functor (FValidation f err) where
+  fmap h = FValidation . fmap (fmap h) . unFValidation
+
+applyValidation::Semigroup err=>Validation err (a->b)->Validation err a->Validation err b
+applyValidation (Success f) (Success a) = Success $ f a
+applyValidation (Success f) (Failure e) = Failure e
+applyValidation (Failure e) (Success a) = Failure e
+applyValidation (Failure e1) (Failure e2) = Failure $ e1 <> e2
+
+instance (Semigroup err, Applicative f) => Applicative (FValidation f err) where
+  pure = FValidation . pure . pure
+  fvh <*> fva = FValidation $ fmap applyValidation (unFValidation fvh) <*> (unFValidation fva) 
+
+data MDWrapped f err a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FValidation f err a }
+
+type Validator err a = (a -> Validation err a)
+
+allValid::Validator err a
+allValid = Success
 
 {-|
 We don't get the Functor and applicative methods from those classes becuase we may want to use this
 in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic.  Though it needs to have equivalent
 functionality.
 -}
-class Applicative f=>Buildable f where
-  bFail::String->f a -- if there's a graceful way to handle errors...
-  bSum::[MDWrapped f a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
+class (Applicative f,Semigroup err)=>Buildable f err where
+  bFail::String->FValidation f err a -- if there's a graceful way to handle errors...
+  bSum::[MDWrapped f err a]->FValidation f err a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
-class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f a where
-  gBuildA::Buildable f=>Maybe FieldName->Maybe a-> f a
+class (Buildable f err, GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f err a where
+  gBuildA::Maybe FieldName->Validator err a->Maybe a-> FValidation f err a
 
-class Builder f a where
-  buildA::Buildable f=>Maybe FieldName->Maybe a-> f a
-  default buildA::(Buildable f, GBuilder f a)=>Maybe FieldName->Maybe a-> f a
+class Buildable f err=>Builder f err a where
+  buildA::Maybe FieldName->Validator err a->Maybe a-> FValidation f err a
+  default buildA::GBuilder f err a=>Maybe FieldName->Validator err a->Maybe a-> FValidation f err a
   buildA = gBuildA
 
-buildAFromConList::Buildable f=>[(Maybe FieldName->Maybe a->MDWrapped f a)]->Maybe FieldName->Maybe a->f a
+buildAFromConList::Buildable f err=>[(Maybe FieldName->Maybe a->MDWrapped f err a)]->Maybe FieldName->Maybe a->FValidation f err a
 buildAFromConList conList mFN ma = internalSum $ fmap (\f->f mFN ma) conList
 
-internalSum::Buildable f=>[MDWrapped f a]->f a
+internalSum::Buildable f err=>[MDWrapped f err a]->FValidation f err a
 internalSum mdws = case length mdws of
   0 -> bFail "Internal error in DataBuilder.  No Constructors in Sum!"
   1 -> value (head mdws)
