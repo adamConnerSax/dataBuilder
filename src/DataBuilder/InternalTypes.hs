@@ -19,8 +19,6 @@ module DataBuilder.InternalTypes
   , ConName
   , MDWrapped(..)
   , FValidation(..)
-  , Validator
-  , allValid
   , Buildable(..)
   , Builder(..)
   , GBuilder(..)
@@ -55,26 +53,16 @@ instance (Semigroup err, Applicative f) => Applicative (FValidation f err) where
 
 data MDWrapped f err a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FValidation f err a }
 
-type Validator err a = (a -> Validation err a)
-
-allValid::Validator err a
-allValid = Success
-
-{-|
-We don't get the Functor and applicative methods from those classes becuase we may want to use this
-in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic.  Though it needs to have equivalent
-functionality.
--}
 class (Applicative f,Semigroup err)=>Buildable f err where
   bFail::String->FValidation f err a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f err a]->FValidation f err a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
 class (Buildable f err, GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f err a where
-  gBuildA::Maybe FieldName->Validator err a->Maybe a-> FValidation f err a
+  gBuildA::Maybe FieldName->Maybe a-> FValidation f err a
 
 class Buildable f err=>Builder f err a where
-  buildA::Maybe FieldName->Validator err a->Maybe a-> FValidation f err a
-  default buildA::GBuilder f err a=>Maybe FieldName->Validator err a->Maybe a-> FValidation f err a
+  buildA::Maybe FieldName->Maybe a-> FValidation f err a
+  default buildA::GBuilder f err a=>Maybe FieldName->Maybe a-> FValidation f err a
   buildA = gBuildA
 
 buildAFromConList::Buildable f err=>[(Maybe FieldName->Maybe a->MDWrapped f err a)]->Maybe FieldName->Maybe a->FValidation f err a
