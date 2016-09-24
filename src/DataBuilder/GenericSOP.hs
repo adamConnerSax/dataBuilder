@@ -1,10 +1,10 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE UndecidableInstances  #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.GenericSOP
@@ -23,16 +23,16 @@ module DataBuilder.GenericSOP
        (
          module GSOP --re-export the Generics.SOP classes for deriving
        , module Generics.SOP.TH
-       )where
+       ) where
 
-import qualified GHC.Generics as GHC
-import Generics.SOP hiding (FieldName)
-import Generics.SOP as GSOP (Generic,HasDatatypeInfo)
-import Generics.SOP.TH (deriveGeneric)
-import qualified Data.Map as M
-import Data.Maybe (fromJust)
+import qualified Data.Map                  as M
+import           Data.Maybe                (fromJust)
+import           Generics.SOP              hiding (FieldName)
+import           Generics.SOP              as GSOP (Generic, HasDatatypeInfo)
+import           Generics.SOP.TH           (deriveGeneric)
+import qualified GHC.Generics              as GHC
 --
-import DataBuilder.InternalTypes
+import           DataBuilder.InternalTypes
 
 ci2name::ConstructorInfo xs-> ConName
 ci2name (Constructor cn) = cn
@@ -76,7 +76,7 @@ buildBlankMap = mdwMapFromList . buildBlanks
 
 
 buildBlanks::forall f err a.GBuilderTopC f err a => Maybe FieldName->[MDWrapped f err a]
-buildBlanks mf = 
+buildBlanks mf =
     let (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
           ADT _ tn cs -> (tn,cs)
           Newtype _ tn c -> (tn,(c :* Nil))
@@ -89,7 +89,7 @@ buildBlanks mf =
 --type All2C f xss = (All2 (Builder f) xss)
 type GBuilderC2 f err xss = (Buildable f err, All2 (Builder f err) xss, SListI2 xss)
 
-buildBlanks'::forall f err xss.GBuilderC2 f err xss => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[f (SOP I xss)]
+buildBlanks'::forall f err xss.GBuilderC2 f err xss => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[(FValidation f err) (SOP I xss)]
 buildBlanks' mf tn cs =
   let allBuilder = Proxy :: Proxy (All (Builder f err))
       pop = POP $ hcliftA allBuilder (buildBlank mf tn) cs
@@ -99,14 +99,15 @@ buildBlanks' mf tn cs =
 
 
 type GBuilderC1 f err xs  = (Buildable f err, All (Builder f err) xs, SListI xs)
-buildBlank::forall f err xs.GBuilderC1 f err xs => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP f xs
-buildBlank mf tn ci = 
+
+buildBlank::forall f err xs.GBuilderC1 f err xs => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP (FValidation f err) xs
+buildBlank mf tn ci =
     let fieldNames = ci2RecordNames ci
-        builderC = Proxy :: Proxy (Builder f)
-    in case fieldNames of 
+        builderC = Proxy :: Proxy (Builder f err)
+    in case fieldNames of
            Nothing -> hcpure builderC (buildA Nothing Nothing)
-           Just fns -> 
-             let builder::Builder f a=>FieldInfo a -> f a
+           Just fns ->
+             let builder::Builder f err a=>FieldInfo a -> FValidation f err a
                  builder fi = buildA (fi2mf fi) Nothing
              in hcliftA builderC builder fns
 
@@ -125,17 +126,17 @@ buildDefaulted mf a =
   in MDWrapped True (cn,mf) fa
 
 
-buildDefFromConInfo::forall f err xs.GBuilderC1 f err xs=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP I xs->NP f xs
+buildDefFromConInfo::forall f err xs.GBuilderC1 f err xs=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP I xs->NP (FValidation f err) xs
 buildDefFromConInfo md tn ci args =
   let fieldNames = ci2RecordNames ci
-      builderC = Proxy :: Proxy (Builder f)
+      builderC = Proxy :: Proxy (Builder f err)
   in case fieldNames of
       Nothing ->
-        let builder::Builder f a=>I a -> f a
+        let builder::Builder f err a=>I a -> FValidation f err a
             builder ia = buildA Nothing (Just $ unI ia)
         in hcliftA builderC builder args
       Just fns ->
-        let builder::Builder f a=>FieldInfo a->I a->f a
+        let builder::Builder f err a=>FieldInfo a->I a->FValidation f err a
             builder fi ia = buildA (fi2mf fi) (Just (unI ia))
         in hcliftA2 builderC builder fns args
 
