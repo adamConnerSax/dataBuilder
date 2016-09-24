@@ -56,26 +56,26 @@ type GenericSOPC a = (Generic a, HasDatatypeInfo a)
 fi2mf::FieldInfo a->Maybe FieldName
 fi2mf (FieldInfo x) = Just x
 
-type MdwMap f a = M.Map ConName (MDWrapped f a)
+type MdwMap f err a = M.Map ConName (MDWrapped f err a)
 
-mdwMapToList::MdwMap f a->[MDWrapped f a]
+mdwMapToList::MdwMap f err a->[MDWrapped f err a]
 mdwMapToList = snd . unzip . M.toList
 
-mdwMapFromList::[MDWrapped f a]->MdwMap f a
+mdwMapFromList::[MDWrapped f err a]->MdwMap f err a
 mdwMapFromList mdws = M.fromList $ zip ((fst . metadata) <$> mdws) mdws
 
-type GBuilderTopC f a = (Buildable f, GenericSOPC a, All2 (Builder f) (Code a))
+type GBuilderTopC f err a = (Buildable f err, GenericSOPC a, All2 (Builder f err) (Code a))
 
-instance GBuilderTopC f a=>GBuilder f a where
+instance GBuilderTopC f err a=>GBuilder f err a where
   gBuildA mf ma = case ma of
     Nothing -> internalSum $ buildBlanks mf
     Just x  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted mf x) (buildBlankMap mf)
 
-buildBlankMap::forall f a.GBuilderTopC f a => Maybe FieldName->MdwMap f a
+buildBlankMap::forall f err a.GBuilderTopC f err a => Maybe FieldName->MdwMap f err a
 buildBlankMap = mdwMapFromList . buildBlanks
 
 
-buildBlanks::forall f a.GBuilderTopC f a => Maybe FieldName->[MDWrapped f a]
+buildBlanks::forall f err a.GBuilderTopC f err a => Maybe FieldName->[MDWrapped f err a]
 buildBlanks mf = 
     let (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
           ADT _ tn cs -> (tn,cs)
@@ -87,18 +87,19 @@ buildBlanks mf =
     in makeMDW <$> mbs
 
 --type All2C f xss = (All2 (Builder f) xss)
-type GBuilderC2 f xss = (Buildable f, All2 (Builder f) xss, SListI2 xss)
-buildBlanks'::forall f xss.GBuilderC2 f xss => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[f (SOP I xss)]
+type GBuilderC2 f err xss = (Buildable f err, All2 (Builder f err) xss, SListI2 xss)
+
+buildBlanks'::forall f err xss.GBuilderC2 f err xss => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[f (SOP I xss)]
 buildBlanks' mf tn cs =
-  let allBuilder = Proxy :: Proxy (All (Builder f))
+  let allBuilder = Proxy :: Proxy (All (Builder f err))
       pop = POP $ hcliftA allBuilder (buildBlank mf tn) cs
 --      wrapped = hliftA wrapBuildable pop -- POP (FABuildable f) xss
       sop = apInjs_POP pop -- [SOP f xss]
   in hsequence <$> sop -- [f (SOP I xss)]
 
 
-type GBuilderC1 f xs  = (Buildable f, All (Builder f) xs, SListI xs)
-buildBlank::forall f xs.GBuilderC1 f xs => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP f xs
+type GBuilderC1 f err xs  = (Buildable f err, All (Builder f err) xs, SListI xs)
+buildBlank::forall f err xs.GBuilderC1 f err xs => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP f xs
 buildBlank mf tn ci = 
     let fieldNames = ci2RecordNames ci
         builderC = Proxy :: Proxy (Builder f)
@@ -109,11 +110,11 @@ buildBlank mf tn ci =
                  builder fi = buildA (fi2mf fi) Nothing
              in hcliftA builderC builder fns
 
-buildDefaulted::forall f a.GBuilderTopC f a => Maybe FieldName->a->MDWrapped f a
+buildDefaulted::forall f err a.GBuilderTopC f err a => Maybe FieldName->a->MDWrapped f err a
 buildDefaulted mf a =
   let cn = constructorName a
 --      mdBase = setmConName mcn md
-      allBuilder = Proxy :: Proxy (All (Builder f))
+      allBuilder = Proxy :: Proxy (All (Builder f err))
 --      dHNP = unAll_NP $ unAll2 Dict :: NP (Dict (All HasDatatypeInfo)) (Code a)
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
@@ -124,7 +125,7 @@ buildDefaulted mf a =
   in MDWrapped True (cn,mf) fa
 
 
-buildDefFromConInfo::forall f xs.GBuilderC1 f xs=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP I xs->NP f xs
+buildDefFromConInfo::forall f err xs.GBuilderC1 f err xs=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP I xs->NP f xs
 buildDefFromConInfo md tn ci args =
   let fieldNames = ci2RecordNames ci
       builderC = Proxy :: Proxy (Builder f)

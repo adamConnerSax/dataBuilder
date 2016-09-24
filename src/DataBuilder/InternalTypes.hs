@@ -19,7 +19,6 @@ module DataBuilder.InternalTypes
   , ConName
   , MDWrapped(..)
   , FValidation(..)
-  , allValid
   , Buildable(..)
   , Builder(..)
   , GBuilder(..)
@@ -54,11 +53,6 @@ instance (Semigroup err, Applicative f) => Applicative (FValidation f err) where
 
 data MDWrapped f err a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FValidation f err a }
 
-{-|
-We don't get the Functor and applicative methods from those classes becuase we may want to use this
-in a case where the underlying f is not Functor or Applicative.  Though it needs to have equivalent
-functionality.
--}
 class (Applicative f,Semigroup err)=>Buildable f err where
   bFail::String->FValidation f err a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f err a]->FValidation f err a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
