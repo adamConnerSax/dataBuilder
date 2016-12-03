@@ -10,7 +10,7 @@ import DataBuilder.TH (deriveBuilder)
 import qualified GHC.Generics as GHCG
 import DataBuilder.Types (Builder)
 import DataBuilder.GenericSOP 
-
+import Data.Monoid ((<>))
 
 
 data Mode = Verbose | Silent deriving (Show,Enum,Bounded,GHCG.Generic)
