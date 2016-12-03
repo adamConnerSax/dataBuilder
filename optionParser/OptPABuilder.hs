@@ -12,6 +12,7 @@ module OptPABuilder
 import DataBuilder.Types
 import Data.Maybe (fromJust)
 import Data.Char (toLower)
+import Data.Monoid ((<>))
 import Options.Applicative
 import DataBuilder.TH (deriveBuilder,handleNothingL,handleJustL)
 import Language.Haskell.TH
