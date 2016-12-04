@@ -1,6 +1,9 @@
+{-# LANGUAGE CPP                     #-}
 {-# LANGUAGE DefaultSignatures       #-}
 {-# LANGUAGE MultiParamTypeClasses   #-}
+#if __GLASGOW_HASKELL__ >= 800
 {-# LANGUAGE UndecidableSuperClasses #-}
+#endif
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.InternalTypes
