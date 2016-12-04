@@ -7,6 +7,8 @@ module DataBuilder.OptionParser
        (
          makeOAParser
        , deriveOABuilder
+       , Generic
+       , HasDatatypeInfo
        ) where
 
 import           DataBuilder.TH      (deriveBuilder, handleJustL,
@@ -18,7 +20,7 @@ import           Data.Maybe          (fromJust)
 import           Data.Monoid         ((<>))
 import           Language.Haskell.TH
 import           Options.Applicative
-
+import           DataBuilder.GenericSOP (Generic,HasDatatypeInfo) -- for export
 
 makeOAParser::Builder Parser a=>Maybe a->Parser a
 makeOAParser = buildA Nothing
