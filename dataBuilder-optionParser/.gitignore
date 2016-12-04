@@ -1,0 +1,13 @@
+.stack-work/*
+*~
+*.lkshs
+
+*.lkshw
+
+lib/DataBuilder/.#Generic.hs
+
+lib/DataBuilder/#Generic.hs#
+
+lib/DataBuilder/Generic.hs
+
+*.hs#
