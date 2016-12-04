@@ -1,5 +1,9 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE CPP                     #-}
+{-# LANGUAGE DefaultSignatures       #-}
+{-# LANGUAGE MultiParamTypeClasses   #-}
+#if __GLASGOW_HASKELL__ >= 800
+{-# LANGUAGE UndecidableSuperClasses #-}
+#endif
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.InternalTypes
@@ -26,7 +30,7 @@ module DataBuilder.InternalTypes
   , internalSum
   ) where
 
-import Data.Maybe (isJust)
+import           Data.Maybe   (isJust)
 import qualified Generics.SOP as GSOP
 
 type FieldName = String

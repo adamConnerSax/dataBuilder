@@ -16,7 +16,7 @@ import Data.Monoid ((<>))
 import Options.Applicative
 import DataBuilder.TH (deriveBuilder,handleNothingL,handleJustL)
 import Language.Haskell.TH
-
+import Data.Monoid ((<>))
 
 
 makeOAParser::Builder Parser a=>Maybe a->Parser a
