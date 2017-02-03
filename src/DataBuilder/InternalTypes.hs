@@ -38,11 +38,6 @@ type ConName = String
 
 data MDWrapped f a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::f a }
 
-{-|
-We don't get the Functor and applicative methods from those classes becuase we may want to use this
-in a case where the underlying f is not Functor or Applicative.  E.g., Reflex.Dynamic.  Though it needs to have equivalent
-functionality.
--}
 class Applicative f=>Buildable f where
   bFail::String->f a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f a]->f a -- used to decide how to represent a sum.  E.g., chooser in an HTML form

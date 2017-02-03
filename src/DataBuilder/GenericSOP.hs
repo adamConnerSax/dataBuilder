@@ -1,10 +1,10 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE UndecidableInstances  #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.GenericSOP
@@ -25,14 +25,14 @@ module DataBuilder.GenericSOP
        , module Generics.SOP.TH
        )where
 
-import qualified GHC.Generics as GHC
-import Generics.SOP hiding (FieldName)
-import Generics.SOP as GSOP (Generic,HasDatatypeInfo)
-import Generics.SOP.TH (deriveGeneric)
-import qualified Data.Map as M
-import Data.Maybe (fromJust)
+import qualified Data.Map                  as M
+import           Data.Maybe                (fromJust)
+import           Generics.SOP              hiding (FieldName, constructorName)
+import           Generics.SOP              as GSOP (Generic, HasDatatypeInfo)
+import           Generics.SOP.TH           (deriveGeneric)
+import qualified GHC.Generics              as GHC
 --
-import DataBuilder.InternalTypes
+import           DataBuilder.InternalTypes
 
 ci2name::ConstructorInfo xs-> ConName
 ci2name (Constructor cn) = cn
@@ -76,7 +76,7 @@ buildBlankMap = mdwMapFromList . buildBlanks
 
 
 buildBlanks::forall f a.GBuilderTopC f a => Maybe FieldName->[MDWrapped f a]
-buildBlanks mf = 
+buildBlanks mf =
     let (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
           ADT _ tn cs -> (tn,cs)
           Newtype _ tn c -> (tn,(c :* Nil))
@@ -99,12 +99,12 @@ buildBlanks' mf tn cs =
 
 type GBuilderC1 f xs  = (Buildable f, All (Builder f) xs, SListI xs)
 buildBlank::forall f xs.GBuilderC1 f xs => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP f xs
-buildBlank mf tn ci = 
+buildBlank mf tn ci =
     let fieldNames = ci2RecordNames ci
         builderC = Proxy :: Proxy (Builder f)
-    in case fieldNames of 
+    in case fieldNames of
            Nothing -> hcpure builderC (buildA Nothing Nothing)
-           Just fns -> 
+           Just fns ->
              let builder::Builder f a=>FieldInfo a -> f a
                  builder fi = buildA (fi2mf fi) Nothing
              in hcliftA builderC builder fns
@@ -146,4 +146,3 @@ constructorName a =
       getConName::ConstructorInfo xs->NP I xs->K ConName xs
       getConName ci args = K $ ci2name ci
   in hcollapse $ hliftA2 getConName cs (unSOP $ from a)
-
