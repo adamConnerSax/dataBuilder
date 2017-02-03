@@ -25,12 +25,14 @@ module DataBuilder.GenericSOP
        , module Generics.SOP.TH
        )where
 
+
 import qualified Data.Map                  as M
 import           Data.Maybe                (fromJust)
 import           Generics.SOP              hiding (FieldName, constructorName)
 import           Generics.SOP              as GSOP (Generic, HasDatatypeInfo)
 import           Generics.SOP.TH           (deriveGeneric)
 import qualified GHC.Generics              as GHC
+
 --
 import           DataBuilder.InternalTypes
 
