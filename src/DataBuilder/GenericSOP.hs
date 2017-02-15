@@ -58,15 +58,15 @@ type GenericSOPC a = (Generic a, HasDatatypeInfo a)
 fi2mf::FieldInfo a->Maybe FieldName
 fi2mf (FieldInfo x) = Just x
 
-type MdwMap f a = M.Map ConName (MDWrapped f a)
+type MdwMap f e a = M.Map ConName (MDWrapped f e a)
 
-mdwMapToList::MdwMap f a->[MDWrapped f a]
+mdwMapToList::MdwMap f e a->[MDWrapped f e a]
 mdwMapToList = snd . unzip . M.toList
 
-mdwMapFromList::[MDWrapped f a]->MdwMap f a
+mdwMapFromList::[MDWrapped f e a]->MdwMap f e a
 mdwMapFromList mdws = M.fromList $ zip ((fst . metadata) <$> mdws) mdws
 
-type GBuilderTopC f a = (Buildable f, GenericSOPC a, All2 (Builder f) (Code a))
+type GBuilderTopC f e a = (Buildable f e, GenericSOPC a, All2 (Builder f e) (Code a))
 
 instance GBuilderTopC f a=>GBuilder f a where
   gBuildA mf ma = case ma of
