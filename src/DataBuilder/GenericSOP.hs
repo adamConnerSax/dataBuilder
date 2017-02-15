@@ -68,17 +68,16 @@ mdwMapFromList mdws = M.fromList $ zip ((fst . metadata) <$> mdws) mdws
 
 type GBuilderTopC f e a = (Buildable f e, GenericSOPC a, All2 (Builder f e) (Code a))
 
-instance GBuilderTopC f a=>GBuilder f a where
-  gBuildA mf ma = case ma of
-    Nothing -> internalSum $ buildBlanks mf
-    Just x  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted mf x) (buildBlankMap mf)
+instance GBuilderTopC f e a=>GBuilder f e a where
+  gBuildA va mf ma = case ma of
+    Nothing -> internalSum $ buildBlanks va mf
+    Just x  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted va mf x) (buildBlankMap mf)
 
 buildBlankMap::forall f a.GBuilderTopC f a => Maybe FieldName->MdwMap f a
 buildBlankMap = mdwMapFromList . buildBlanks
 
-
-buildBlanks::forall f a.GBuilderTopC f a => Maybe FieldName->[MDWrapped f a]
-buildBlanks mf =
+buildBlanks::forall f e a.GBuilderTopC f e a =>Validator e a->Maybe FieldName->[MDWrapped f e a]
+buildBlanks va mf =
     let (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
           ADT _ tn cs -> (tn,cs)
           Newtype _ tn c -> (tn,(c :* Nil))
