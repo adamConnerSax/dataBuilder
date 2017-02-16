@@ -28,6 +28,7 @@ module DataBuilder.InternalTypes
   , VF(..)
   , Buildable(..)
   , Builder(..)
+  , buildA
   , GBuilder(..)
   , buildAFromConList
   , validateVF
@@ -76,14 +77,15 @@ class Applicative f=>Buildable f e | e->f where
   bSum::[MDWrapped f e a]->VF f e a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f e a where
-  gBuildA::Buildable f e=>Validator e a->Maybe FieldName->Maybe a->VF f e a
+  gBuildValidated::Buildable f e=>Validator e a->Maybe FieldName->Maybe a->VF f e a
 
-class Builder f e a | e->f where
-  validateA::Validator e a
-  validateA = AccSuccess
-  buildA::Buildable f e=>Maybe FieldName->Maybe a-> VF f e a
-  default buildA::(Buildable f e, GBuilder f e a)=>Maybe FieldName->Maybe a->VF f e a
-  buildA = gBuildA validateA
+class Buildable f e => Builder f e a  where
+  buildValidated::Buildable f e=>Validator e a->Maybe FieldName->Maybe a-> VF f e a
+  default buildValidated::(Buildable f e, GBuilder f e a)=>Validator e a->Maybe FieldName->Maybe a->VF f e a
+  buildValidated va = gBuildValidated va
+
+buildA::Builder f e a=>Maybe FieldName->Maybe a-> VF f e a
+buildA = buildValidated AccSuccess
 
 -- ??
 buildAFromConList::Buildable f e=>[(Validator e a->Maybe FieldName->Maybe a->MDWrapped f e a)]->Validator e a->Maybe FieldName->Maybe a->VF f e a

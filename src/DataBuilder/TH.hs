@@ -90,8 +90,8 @@ lookupType n = do
 deriveBuilder::Name -> Name -> Q [Dec]
 deriveBuilder builderName typeName = do
   [d|instance Builder $(conT builderName) $(conT typeName) where
-       buildA mFN Nothing  = $(handleNothingL typeName) mFN
-       buildA mFN (Just x) = $(handleJustL typeName) mFN x|]
+       buildValidated va mFN Nothing  = $(handleNothingL typeName) va mFN
+       buildValidated va mFN (Just x) = $(handleJustL typeName) va mFN x|]
 
 {-
 The below allows the user to customize the instance with a validator but still use TH to generate the buildA function.
@@ -109,8 +109,8 @@ instance Builder f Text=>Buildable f Text OrderedInts where
 
 deriveBuildA::Name->Q [Dec]
 deriveBuildA typeName = [d|
-  buildA mFN Nothing = $(handleNothingL typeName) mFN
-  buildA mFN (Just x) = $(handleJustL typeName) mFN x
+  buildValidated va mFN Nothing = $(handleNothingL typeName) va mFN
+  buildValidated va mFN (Just x) = $(handleJustL typeName) va mFN x
   |]
 
 

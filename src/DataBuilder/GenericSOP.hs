@@ -70,7 +70,7 @@ mdwMapFromList mdws = M.fromList $ zip ((fst . metadata) <$> mdws) mdws
 type GBuilderTopC f e a = (Buildable f e, GenericSOPC a, All2 (Builder f e) (Code a))
 
 instance (Semigroup e, GBuilderTopC f e a)=>GBuilder f e a where
-  gBuildA va mf ma = case ma of
+  gBuildValidated va mf ma = case ma of
     Nothing -> internalSum $ buildBlanks va mf
     Just x  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted va mf x) (buildBlankMap va mf)
 

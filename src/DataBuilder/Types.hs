@@ -7,6 +7,7 @@ module DataBuilder.Types
        , MDWrapped(..)
        , Buildable(..)
        , Builder(..)
+       , buildA
        , GBuilder(..)
        , buildAFromConList
        , validateVF
