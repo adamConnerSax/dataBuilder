@@ -3,14 +3,18 @@ module DataBuilder.Types
          FieldName
        , ConName
        , Validator
-       , VF(..)
+       , FV(..)
+       , makeFV
+       , unFV
+       , fToFV
        , MDWrapped(..)
        , Buildable(..)
        , Builder(..)
        , buildA
        , GBuilder(..)
        , buildAFromConList
-       , validateVF
+       , validateFV
+       , MonadLike(..)
        ) where
 
 import           DataBuilder.InternalTypes

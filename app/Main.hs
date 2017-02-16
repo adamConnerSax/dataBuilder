@@ -1,18 +1,19 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell       #-}
 
 
 module Main where
 
-import DataBuilder.Types
-import DataBuilder.TH
-import Data.List (intercalate,find)
-import Text.Read (readMaybe)
-import System.IO (hFlush,stdout)
-import Data.Maybe (fromJust)
+import           Data.Functor.Compose
+import           Data.List            (find, intercalate)
+import           Data.Maybe           (fromJust)
+import           DataBuilder.TH
+import           DataBuilder.Types
+import           System.IO            (hFlush, stdout)
+import           Text.Read            (readMaybe)
 
 data TestNull = Null deriving (Show)
 data TestOne = One Int deriving (Show)
@@ -24,22 +25,31 @@ data TestNested = Nested Int String TestSum deriving (Show)
 
 newtype BuilderEx a = BuilderEx { unBldr::IO (Maybe a) } deriving (Functor)
 
+type BuilderEx a = Compose IO Maybe a
+unBldr::BuilderEx a -> IO (Maybe a)
+unBldr = getCompose
 
+makeBldr = Compose
+
+instance MonadLike Maybe
+
+{-
 instance Applicative BuilderEx where
   pure x = BuilderEx $ return $ Just x
   bf <*> ba = BuilderEx $ do
     mf <- unBldr bf
     ma <- unBldr ba
     return $ mf <*> ma
+-}
+
 
 instance Buildable BuilderEx where
-  bFail msg = BuilderEx $ putStrLn msg >> return Nothing 
+  bFail msg = makeBldr $ putStrLn msg >> return Nothing
   bSum = sumBEs
 
-
 -- the only tricky part.  How to handle sum types?
-sumBEs::[MDWrapped BuilderEx a]->BuilderEx a
-sumBEs mdws = BuilderEx $ do
+sumBEs::[MDWrapped IO Maybe a]->BuilderEx a
+sumBEs mdws = makeBldr $ do
   let starDefault mdw = (fst $ metadata mdw) ++ if hasDefault mdw then "*" else ""
       conNames = map starDefault mdws
       names = intercalate "," conNames
@@ -55,9 +65,9 @@ sumBEs mdws = BuilderEx $ do
 
 -- You need base case builders in order to build at least primitive types
 -- In general you would also need to handle lists, maps or traversables in general
-simpleBuilder::(Show a, Read a)=>Maybe FieldName->Maybe a->BuilderEx a 
+simpleBuilder::(Show a, Read a)=>Maybe FieldName->Maybe a->BuilderEx a
 simpleBuilder mf Nothing = BuilderEx $ do
-  let prompt = (maybe "" id mf) ++ ": " 
+  let prompt = (maybe "" id mf) ++ ": "
   putStr prompt
   hFlush stdout
   (readMaybe <$> getLine)
@@ -71,7 +81,7 @@ simpleBuilder mf (Just a) = BuilderEx $ do
 -- This is overlappable so that we can use the TH to derive this for things.
 -- Otherwise this covers all things since the constraints don't restrict matching.
 instance {-# OVERLAPPABLE #-}(Show a, Read a)=>Builder BuilderEx a where
-  buildA = simpleBuilder 
+  buildA = simpleBuilder
 
 
 deriveBuilder ''BuilderEx ''TestNull
@@ -82,7 +92,7 @@ deriveBuilder ''BuilderEx ''TestRecord
 deriveBuilder ''BuilderEx ''TestNested
 
 g::Show a=>Maybe a->IO ()
-g = maybe (putStrLn "built Nothing") (putStrLn . show) 
+g = maybe (putStrLn "built Nothing") (putStrLn . show)
 
 
 main::IO ()
@@ -101,4 +111,4 @@ main = do
   unBldr (buildA Nothing (Nothing :: Maybe TestNested)) >>= g
   putStrLn "Build a TestNested from a value (=TestNested 12 \"Hello\" (D 'a' 2 (TestR 5 \"Adios\"))"
   unBldr (buildA Nothing (Just (Nested 12 "Hello" (D 'a' 2 (TestR 5 "Adios"))))) >>= g
- 
+

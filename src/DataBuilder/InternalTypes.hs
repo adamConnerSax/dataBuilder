@@ -1,8 +1,9 @@
 {-# LANGUAGE CPP                     #-}
 {-# LANGUAGE DefaultSignatures       #-}
-{-# LANGUAGE MultiParamTypeClasses   #-}
---{-# LANGUAGE AllowAmbiguousTypes     #-}
+{-# LANGUAGE FlexibleContexts        #-}
 {-# LANGUAGE FunctionalDependencies  #-}
+{-# LANGUAGE MultiParamTypeClasses   #-}
+{-# LANGUAGE RankNTypes              #-}
 #if __GLASGOW_HASKELL__ >= 800
 {-# LANGUAGE UndecidableSuperClasses #-}
 #endif
@@ -25,74 +26,92 @@ module DataBuilder.InternalTypes
   , ConName
   , MDWrapped(..)
   , Validator
-  , VF(..)
+  , FV(..)
+  , makeFV
+  , unFV
+  , fToFV
   , Buildable(..)
   , Builder(..)
   , buildA
   , GBuilder(..)
   , buildAFromConList
-  , validateVF
+  , validateFV
+  , MonadLike(..)
     -- * Not exposed outside the library
-  , mergeAV
   , internalSum
   ) where
 
-import           Control.Applicative (Alternative (..))
-import           Data.Maybe          (isJust)
-import           Data.Semigroup      (Semigroup)
-import           Data.Validation     (AccValidation (..))
-import qualified Generics.SOP        as GSOP
-
+import           Control.Applicative  (Alternative (..))
+import           Control.Monad        (join)
+import           Data.Functor.Compose (Compose (..))
+import           Data.Maybe           (isJust)
+import           Data.Semigroup       (Semigroup)
+import           Data.Validation      (AccValidation (..))
+import qualified Generics.SOP         as GSOP
 
 type FieldName = String
 type ConName = String
-type Validator e a = a -> AccValidation e a
+type Validator v a = a -> v a
 
-newtype VF f e a = VF { unVF::f (AccValidation e a) }
-instance Functor f => Functor (VF f e) where
-  fmap g vf = VF $ (fmap g) <$> unVF vf
+type FV f v = Compose f v
 
-instance (Applicative f,Semigroup e)=>Applicative (VF f e) where
-  pure = VF . pure . AccSuccess
-  vfg <*> vfa = VF $ (fmap (<*>) (unVF vfg)) <*> (unVF vfa)
+makeFV::f (v a) -> FV f v a
+makeFV = Compose
 
-instance (Semigroup e,Alternative f)=>Alternative (VF f e) where
-  empty = VF empty
-  vfa <|> vfb = VF $ (unVF vfa) <|> (unVF vfb)
+unFV::FV f v a -> f (v a)
+unFV = getCompose
 
-mergeAV::AccValidation e (AccValidation e a)->AccValidation e a
-mergeAV x = case x of
-  AccFailure err -> AccFailure err
-  AccSuccess x -> x
+fToFV::(Functor f, MonadLike v)=>f a -> FV f v a
+fToFV = makeFV . fmap pureLike
 
-validateVF::Functor f=>Validator e a -> VF f e a -> VF f e a
-validateVF va = VF . (fmap mergeAV) . unVF . fmap va
+{-
+instance (Functor f, Functor v) => Functor (FV f v a) where
+  fmap g (FV fv) = FV $ (fmap g) <$> fv
 
+instance (Applicative f,Applicative v)=>Applicative (FV f v) where
+  pure = FV . pure . pure
+  (FV fvg) <*> (FV fva) = FV $ (fmap (<*>) fvg) <*> fva
 
-data MDWrapped f e a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::VF f e a }
+instance (Alternative f)=>Alternative (FV f v e) where
+  empty = FV empty
+  fva <|> fvb = FV $ fva <|> fvb
+-}
 
-class Applicative f=>Buildable f e | e->f where
-  noConsError::e
-  bFail::e->VF f e a -- if there's a graceful way to handle errors...
-  bSum::[MDWrapped f e a]->VF f e a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
+{- NB: these look monadish but v may not be a monad but have reasonable definitions of these, e.g., AccValidate -}
 
-class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f e a where
-  gBuildValidated::Buildable f e=>Validator e a->Maybe FieldName->Maybe a->VF f e a
+class MonadLike f where
+  pureLike::a -> f a
+  default pureLike::Applicative f=>a -> f a
+  pureLike = pure
+  joinLike::f (f a) -> f a
+  default joinLike::Monad f=>f (f a) -> f a
+  joinLike = join
 
-class Buildable f e => Builder f e a  where
-  buildValidated::Buildable f e=>Validator e a->Maybe FieldName->Maybe a-> VF f e a
-  default buildValidated::(Buildable f e, GBuilder f e a)=>Validator e a->Maybe FieldName->Maybe a->VF f e a
+validateFV::(Functor f,Functor v,MonadLike v)=>Validator v a ->FV f v a -> FV f v a
+validateFV va = Compose . (fmap joinLike) . getCompose . fmap va
+
+data MDWrapped f v a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FV f v a }
+
+class (Applicative f, Applicative v)=>Buildable f v  where
+  bFail::String->FV f v a -- if there's a graceful way to handle errors...
+  bSum::[MDWrapped f v a]->FV f v a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
+
+class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f v a where
+  gBuildValidated::Buildable f v=>Validator v a->Maybe FieldName->Maybe a->FV f v a
+
+class Buildable f v => Builder f v a  where
+  buildValidated::Buildable f v=>Validator v a->Maybe FieldName->Maybe a-> FV f v a
+  default buildValidated::(Buildable f v, GBuilder f v a)=>Validator v a->Maybe FieldName->Maybe a->FV f v a
   buildValidated va = gBuildValidated va
 
-buildA::Builder f e a=>Maybe FieldName->Maybe a-> VF f e a
-buildA = buildValidated AccSuccess
+buildA::(Builder f v a,MonadLike v)=>Maybe FieldName->Maybe a-> FV f v a
+buildA = buildValidated pureLike
 
--- ??
-buildAFromConList::Buildable f e=>[(Validator e a->Maybe FieldName->Maybe a->MDWrapped f e a)]->Validator e a->Maybe FieldName->Maybe a->VF f e a
+buildAFromConList::Buildable f v=>[(Validator v a->Maybe FieldName->Maybe a->MDWrapped f v a)]->Validator v a->Maybe FieldName->Maybe a->FV f v a
 buildAFromConList conList va mFN ma  = internalSum $ fmap (\q->q va mFN ma) conList
 
-internalSum::Buildable f e=>[MDWrapped f e a]->VF f e a
+internalSum::Buildable f v=>[MDWrapped f v a]->FV f v a
 internalSum mdws = case length mdws of
-  0 -> bFail noConsError
+  0 -> bFail "No Constructors in sum (this shouldn't happen!)."
   1 -> value (head mdws)
   _ -> bSum mdws
