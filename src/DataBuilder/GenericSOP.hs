@@ -28,6 +28,7 @@ module DataBuilder.GenericSOP
 
 import qualified Data.Map                  as M
 import           Data.Maybe                (fromJust)
+import           Data.Semigroup            (Semigroup)
 import           Generics.SOP              hiding (FieldName, constructorName)
 import           Generics.SOP              as GSOP (Generic, HasDatatypeInfo)
 import           Generics.SOP.TH           (deriveGeneric)
@@ -68,74 +69,77 @@ mdwMapFromList mdws = M.fromList $ zip ((fst . metadata) <$> mdws) mdws
 
 type GBuilderTopC f e a = (Buildable f e, GenericSOPC a, All2 (Builder f e) (Code a))
 
-instance GBuilderTopC f e a=>GBuilder f e a where
+instance (Semigroup e, GBuilderTopC f e a)=>GBuilder f e a where
   gBuildA va mf ma = case ma of
     Nothing -> internalSum $ buildBlanks va mf
-    Just x  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted va mf x) (buildBlankMap mf)
+    Just x  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted va mf x) (buildBlankMap va mf)
 
-buildBlankMap::forall f a.GBuilderTopC f a => Maybe FieldName->MdwMap f a
-buildBlankMap = mdwMapFromList . buildBlanks
+buildBlankMap::forall f e a.(Semigroup e, GBuilderTopC f e a) => Validator e a->Maybe FieldName->MdwMap f e a
+buildBlankMap va = mdwMapFromList . buildBlanks va
 
-buildBlanks::forall f e a.GBuilderTopC f e a =>Validator e a->Maybe FieldName->[MDWrapped f e a]
+validateVF::Functor f=>Validator e a -> VF f e a -> VF f e a
+validateVF va = VF . (fmap mergeAV) . unVF . fmap va
+
+buildBlanks::forall f e a.(Semigroup e, GBuilderTopC f e a) =>Validator e a->Maybe FieldName->[MDWrapped f e a]
 buildBlanks va mf =
     let (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
           ADT _ tn cs -> (tn,cs)
           Newtype _ tn c -> (tn,(c :* Nil))
         mds = gMakeMDs mf tn cs
-        builders = fmap to <$> buildBlanks' mf tn cs
+        builders = (validateVF va . fmap to) <$> buildBlanks' mf tn cs -- here's where we validate the constructed type (1)
         mbs = zip mds builders
         makeMDW (md',bldr) = MDWrapped False md' bldr
     in makeMDW <$> mbs
 
 --type All2C f xss = (All2 (Builder f) xss)
-type GBuilderC2 f xss = (Buildable f, All2 (Builder f) xss, SListI2 xss)
-buildBlanks'::forall f xss.GBuilderC2 f xss => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[f (SOP I xss)]
+type GBuilderC2 f e xss = (Buildable f e, All2 (Builder f e) xss, SListI2 xss)
+buildBlanks'::forall f e xss.(Semigroup e, GBuilderC2 f e xss) => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[VF f e (SOP I xss)]
 buildBlanks' mf tn cs =
-  let allBuilder = Proxy :: Proxy (All (Builder f))
+  let allBuilder = Proxy :: Proxy (All (Builder f e))
       pop = POP $ hcliftA allBuilder (buildBlank mf tn) cs
 --      wrapped = hliftA wrapBuildable pop -- POP (FABuildable f) xss
       sop = apInjs_POP pop -- [SOP f xss]
   in hsequence <$> sop -- [f (SOP I xss)]
 
 
-type GBuilderC1 f xs  = (Buildable f, All (Builder f) xs, SListI xs)
-buildBlank::forall f xs.GBuilderC1 f xs => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP f xs
+type GBuilderC1 f e xs  = (Buildable f e, All (Builder f e) xs, SListI xs)
+buildBlank::forall f e xs.GBuilderC1 f e xs => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP (VF f e) xs
 buildBlank mf tn ci =
     let fieldNames = ci2RecordNames ci
-        builderC = Proxy :: Proxy (Builder f)
+        builderC = Proxy :: Proxy (Builder f e)
     in case fieldNames of
            Nothing -> hcpure builderC (buildA Nothing Nothing)
            Just fns ->
-             let builder::Builder f a=>FieldInfo a -> f a
+             let builder::Builder f e a=>FieldInfo a -> VF f e a
                  builder fi = buildA (fi2mf fi) Nothing
              in hcliftA builderC builder fns
 
-buildDefaulted::forall f a.GBuilderTopC f a => Maybe FieldName->a->MDWrapped f a
-buildDefaulted mf a =
+buildDefaulted::forall f e a.(Semigroup e, GBuilderTopC f e a) => Validator e a->Maybe FieldName->a->MDWrapped f e a
+buildDefaulted va mf a =
   let cn = constructorName a
 --      mdBase = setmConName mcn md
-      allBuilder = Proxy :: Proxy (All (Builder f))
+      allBuilder = Proxy :: Proxy (All (Builder f e))
 --      dHNP = unAll_NP $ unAll2 Dict :: NP (Dict (All HasDatatypeInfo)) (Code a)
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
-      sopf   = SOP $ hcliftA2 allBuilder (buildDefFromConInfo mf tn) cs (unSOP $ from a) -- SOP f xss
+      sopf   = SOP $ hcliftA2 allBuilder (buildDefFromConInfo mf tn) cs (unSOP $ from a) -- SOP (VF f e) xss
 --      sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
-      fa = fmap to . hsequence $ sopf                                           -- f a
-  in MDWrapped True (cn,mf) fa
+      vfa = validateVF va . fmap to . hsequence $ sopf   -- here's where we validate the constructed type (2) 
+  in MDWrapped True (cn,mf) vfa
 
 
-buildDefFromConInfo::forall f xs.GBuilderC1 f xs=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP I xs->NP f xs
+buildDefFromConInfo::forall f e xs.GBuilderC1 f e xs=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP I xs->NP (VF f e) xs
 buildDefFromConInfo md tn ci args =
   let fieldNames = ci2RecordNames ci
       builderC = Proxy :: Proxy (Builder f)
   in case fieldNames of
       Nothing ->
-        let builder::Builder f a=>I a -> f a
+        let builder::Builder f e a=>I a -> VF f e a
             builder ia = buildA Nothing (Just $ unI ia)
         in hcliftA builderC builder args
       Just fns ->
-        let builder::Builder f a=>FieldInfo a->I a->f a
+        let builder::Builder f e a=>FieldInfo a->I a->VF f e a
             builder fi ia = buildA (fi2mf fi) (Just (unI ia))
         in hcliftA2 builderC builder fns args
 
