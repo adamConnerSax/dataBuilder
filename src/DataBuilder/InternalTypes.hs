@@ -30,15 +30,17 @@ module DataBuilder.InternalTypes
   , Builder(..)
   , GBuilder(..)
   , buildAFromConList
+  , validateVF
     -- * Not exposed outside the library
   , mergeAV
   , internalSum
   ) where
 
-import           Data.Maybe   (isJust)
-import qualified Generics.SOP as GSOP
-import Data.Validation (AccValidation(..))
-import Data.Semigroup (Semigroup)
+import           Control.Applicative (Alternative (..))
+import           Data.Maybe          (isJust)
+import           Data.Semigroup      (Semigroup)
+import           Data.Validation     (AccValidation (..))
+import qualified Generics.SOP        as GSOP
 
 
 type FieldName = String
@@ -51,13 +53,21 @@ instance Functor f => Functor (VF f e) where
 
 instance (Applicative f,Semigroup e)=>Applicative (VF f e) where
   pure = VF . pure . AccSuccess
-  vfg <*> vfa = VF $ (fmap (<*>) (unVF vfg)) <*> (unVF vfa)  
+  vfg <*> vfa = VF $ (fmap (<*>) (unVF vfg)) <*> (unVF vfa)
+
+instance (Semigroup e,Alternative f)=>Alternative (VF f e) where
+  empty = VF empty
+  vfa <|> vfb = VF $ (unVF vfa) <|> (unVF vfb)
 
 mergeAV::AccValidation e (AccValidation e a)->AccValidation e a
 mergeAV x = case x of
   AccFailure err -> AccFailure err
   AccSuccess x -> x
-  
+
+validateVF::Functor f=>Validator e a -> VF f e a -> VF f e a
+validateVF va = VF . (fmap mergeAV) . unVF . fmap va
+
+
 data MDWrapped f e a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::VF f e a }
 
 class Applicative f=>Buildable f e | e->f where

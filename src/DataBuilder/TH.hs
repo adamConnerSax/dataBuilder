@@ -93,6 +93,27 @@ deriveBuilder builderName typeName = do
        buildA mFN Nothing  = $(handleNothingL typeName) mFN
        buildA mFN (Just x) = $(handleJustL typeName) mFN x|]
 
+{-
+The below allows the user to customize the instance with a validator but still use TH to generate the buildA function.
+
+newtype OrderedInts = OrderedInts Int Int
+
+validOI::Validator Text OrderedInts
+validOI oi@(OrderedInts a b) = if (b >= a) then AccSuccess oi else AccFailure "Int out of order"
+
+instance Builder f Text=>Buildable f Text OrderedInts where
+  validateA = validOI
+  buildA = $deriveBuildA ''OrderedInts
+
+-}
+
+deriveBuildA::Name->Q [Dec]
+deriveBuildA typeName = [d|
+  buildA mFN Nothing = $(handleNothingL typeName) mFN
+  buildA mFN (Just x) = $(handleJustL typeName) mFN x
+  |]
+
+
 handleNothingL::Name->Q Exp
 handleNothingL n = do
   mfN <- newName "mf"

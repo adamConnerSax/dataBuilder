@@ -1,62 +1,66 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
 module OptPABuilder
        (
          makeOAParser
        , deriveOABuilder
        ) where
 
-import DataBuilder.Types
-import Data.Maybe (fromJust)
-import Data.Char (toLower)
-import Data.Monoid ((<>))
-import Options.Applicative
-import DataBuilder.TH (deriveBuilder,handleNothingL,handleJustL)
-import Language.Haskell.TH
-import Data.Monoid ((<>))
+import           Data.Char           (toLower)
+import           Data.Maybe          (fromJust)
+import           Data.Monoid         ((<>))
+import           Data.Monoid         ((<>))
+import           Data.Text           (Text, unpack)
+import           Data.Validation     (AccValidation (..))
+import           DataBuilder.TH      (deriveBuilder, handleJustL,
+                                      handleNothingL)
+import           DataBuilder.Types
+import           Language.Haskell.TH
+import           Options.Applicative
 
+makeOAParser::Builder Parser Text a=>Maybe a->Parser (AccValidation Text a)
+makeOAParser = unVF . buildA Nothing
 
-makeOAParser::Builder Parser a=>Maybe a->Parser a
-makeOAParser = buildA Nothing
-
-instance Buildable Parser where
-  bFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
+instance Buildable Parser Text where
+  noConsError = "No constructors in sum type!"
+  bFail msg = VF . fmap AccSuccess $ abortOption (ErrorMsg $ unpack msg) mempty <*> option disabled mempty
   bSum = sumToCommand
 
 -- derive a command parser from a sum-type
-sumToCommand::[MDWrapped Parser a]->Parser a
+sumToCommand::[MDWrapped Parser Text a]->VF Parser Text a
 sumToCommand mdws =
-  let makeCommand mdw = command (fst . metadata $ mdw) (info (DataBuilder.Types.value mdw) mempty)
-  in subparser $ mconcat (map makeCommand mdws)
+  let makeCommand mdw = command (fst . metadata $ mdw) (info (unVF $ DataBuilder.Types.value mdw) mempty)
+  in VF $ subparser $ mconcat (map makeCommand mdws)
 
 --shortAndLong::HasName f=>String->Mod f a
 shortAndLong x = long x <> short (head x)
 
-parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Maybe FieldName->Maybe a->Parser a
+parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Maybe FieldName->Maybe a->VF Parser Text a
 parseReadable reader mHelp mf ma =
-  case mf of
+  VF . fmap AccSuccess $ case mf of
     Nothing->argument reader ((maybe mempty Options.Applicative.value ma) <> (maybe mempty help mHelp))
     Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> (maybe mempty help mHelp))
 
-instance Builder Parser Int where
+instance Builder Parser Text Int where
   buildA = parseReadable auto (Just "Int")
 
-instance Builder Parser Double where
+instance Builder Parser Text Double where
   buildA = parseReadable auto (Just "Double")
 
-instance Builder Parser String where
+instance Builder Parser Text String where
   buildA = parseReadable str (Just "String")
 
-instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser e where
-  buildA mf mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
+instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser Text e where
+  buildA mf mE = VF . fmap AccSuccess $ foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
     fl = maybe flag' flag mE
-    optDesc = maybe mempty help mf 
+    optDesc = maybe mempty help mf
 
-instance {-# OVERLAPPABLE #-} Builder Parser a=>Builder Parser (Maybe a) where
-  buildA mf mmA = optional $ maybe (buildA mf Nothing) (buildA mf) mmA 
+instance {-# OVERLAPPABLE #-} Builder Parser Text a=>Builder Parser Text (Maybe a) where
+  buildA mf mmA = optional $ maybe (buildA mf Nothing) (buildA mf) mmA
 
 deriveOABuilder::Name -> Q [Dec]
 deriveOABuilder typeName = do

@@ -77,8 +77,6 @@ instance (Semigroup e, GBuilderTopC f e a)=>GBuilder f e a where
 buildBlankMap::forall f e a.(Semigroup e, GBuilderTopC f e a) => Validator e a->Maybe FieldName->MdwMap f e a
 buildBlankMap va = mdwMapFromList . buildBlanks va
 
-validateVF::Functor f=>Validator e a -> VF f e a -> VF f e a
-validateVF va = VF . (fmap mergeAV) . unVF . fmap va
 
 buildBlanks::forall f e a.(Semigroup e, GBuilderTopC f e a) =>Validator e a->Maybe FieldName->[MDWrapped f e a]
 buildBlanks va mf =
@@ -125,14 +123,14 @@ buildDefaulted va mf a =
         Newtype _ tn c -> (tn,(c :* Nil))
       sopf   = SOP $ hcliftA2 allBuilder (buildDefFromConInfo mf tn) cs (unSOP $ from a) -- SOP (VF f e) xss
 --      sopFAf = hliftA wrapBuildable sopf                                                   -- SOP (FABuilder f) xss
-      vfa = validateVF va . fmap to . hsequence $ sopf   -- here's where we validate the constructed type (2) 
+      vfa = validateVF va . fmap to . hsequence $ sopf   -- here's where we validate the constructed type (2)
   in MDWrapped True (cn,mf) vfa
 
 
 buildDefFromConInfo::forall f e xs.GBuilderC1 f e xs=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP I xs->NP (VF f e) xs
 buildDefFromConInfo md tn ci args =
   let fieldNames = ci2RecordNames ci
-      builderC = Proxy :: Proxy (Builder f)
+      builderC = Proxy :: Proxy (Builder f e)
   in case fieldNames of
       Nothing ->
         let builder::Builder f e a=>I a -> VF f e a

@@ -51,6 +51,7 @@ executable dataBuilder-OptionParser
     build-depends:
                   base -any
                 , validation -any
+                , text -any
                 , template-haskell -any
                 , dataBuilder -any
                 , optparse-applicative -any
