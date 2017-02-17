@@ -15,6 +15,7 @@ module DataBuilder.Types
        , GBuilder(..)
        , buildAFromConList
        , validateFV
+       , validatefv
        , MonadLike(..)
        ) where
 

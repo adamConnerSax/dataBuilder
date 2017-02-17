@@ -37,6 +37,7 @@ module DataBuilder.InternalTypes
   , GBuilder(..)
   , buildAFromConList
   , validateFV
+  , validatefv
   , MonadLike(..)
     -- * Not exposed outside the library
   , internalSum
@@ -74,6 +75,9 @@ class MonadLike f where
   joinLike::f (f a) -> f a
   default joinLike::Monad f=>f (f a) -> f a
   joinLike = join
+
+validatefv::(Functor f,Functor v,MonadLike v)=>Validator v a ->f (v a) -> f (v a)
+validatefv va = fmap joinLike . getCompose . fmap va . Compose
 
 validateFV::(Functor f,Functor v,MonadLike v)=>Validator v a ->FV f v a -> FV f v a
 validateFV va = Compose . (fmap joinLike) . getCompose . fmap va
