@@ -69,16 +69,16 @@ mdwMapFromList mdws = M.fromList $ zip ((fst . metadata) <$> mdws) mdws
 
 type GBuilderTopC f v a = (Buildable f v, GenericSOPC a, All2 (Builder f v) (Code a))
 
-instance (MonadLike v, GBuilderTopC f v a)=>GBuilder f v a where
+instance (MonadLike v, GBuilderTopC f v a, Validatable v a)=>GBuilder f v a where
   gBuildValidated va mf ma = case ma of
     Nothing -> internalSum $ buildBlanks va mf
     Just x  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted va mf x) (buildBlankMap va mf)
 
-buildBlankMap::forall f v a.(MonadLike v, GBuilderTopC f v a) => Validator v a->Maybe FieldName->MdwMap f v a
+buildBlankMap::forall f v a.(MonadLike v, GBuilderTopC f v a, Validatable v a) => Validator v a->Maybe FieldName->MdwMap f v a
 buildBlankMap va = mdwMapFromList . buildBlanks va
 
 
-buildBlanks::forall f v a.(MonadLike v, GBuilderTopC f v a) =>Validator v a->Maybe FieldName->[MDWrapped f v a]
+buildBlanks::forall f v a.(MonadLike v, GBuilderTopC f v a, Validatable v a) =>Validator v a->Maybe FieldName->[MDWrapped f v a]
 buildBlanks va mf =
     let (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
           ADT _ tn cs -> (tn,cs)
@@ -90,7 +90,7 @@ buildBlanks va mf =
     in makeMDW <$> mbs
 
 --type All2C f xss = (All2 (Builder f) xss)
-type GBuilderC2 f v xss = (Buildable f v, All2 (Builder f v) xss, SListI2 xss)
+type GBuilderC2 f v xss = (Buildable f v, All2 (Validatable v) xss, All2 (Builder f v) xss, SListI2 xss)
 buildBlanks'::forall f v xss.(MonadLike v, GBuilderC2 f v xss) => Maybe FieldName->DatatypeName->NP ConstructorInfo xss->[FV f v (SOP I xss)]
 buildBlanks' mf tn cs =
   let allBuilder = Proxy :: Proxy (All (Builder f v))
@@ -100,7 +100,7 @@ buildBlanks' mf tn cs =
   in hsequence <$> sop -- [f (SOP I xss)]
 
 
-type GBuilderC1 f v xs  = (Buildable f v, All (Builder f v) xs, SListI xs)
+type GBuilderC1 f v xs  = (Buildable f v, All (Validatable v) xs, All (Builder f v) xs, SListI xs)
 buildBlank::forall f v xs.(MonadLike v,GBuilderC1 f v xs) => Maybe FieldName->DatatypeName->ConstructorInfo xs->NP (FV f v) xs
 buildBlank mf tn ci =
     let fieldNames = ci2RecordNames ci
@@ -108,7 +108,7 @@ buildBlank mf tn ci =
     in case fieldNames of
            Nothing -> hcpure builderC (buildA Nothing Nothing)
            Just fns ->
-             let builder::Builder f v a=>FieldInfo a -> FV f v a
+             let builder::(Validatable v a,Builder f v a)=>FieldInfo a -> FV f v a
                  builder fi = buildA (fi2mf fi) Nothing
              in hcliftA builderC builder fns
 
