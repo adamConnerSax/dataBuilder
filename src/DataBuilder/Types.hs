@@ -3,6 +3,7 @@ module DataBuilder.Types
          FieldName
        , ConName
        , Validator
+       , Validatable(..)
        , FV(..)
        , makeFV
        , unFV

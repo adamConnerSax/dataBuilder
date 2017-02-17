@@ -15,14 +15,14 @@ import           Data.Functor.Identity (Identity (..))
 import           Data.Maybe            (fromJust)
 import           Data.Monoid           ((<>))
 import           Data.Validation       (AccValidation (..))
-import           DataBuilder.TH        (deriveBuilder, handleJustL,
-                                        handleNothingL)
+--import           DataBuilder.TH        (deriveBuilder, handleJustL,
+--                                        handleNothingL)
 import           DataBuilder.Types
 import           Language.Haskell.TH
 import           Options.Applicative
 
 instance MonadLike Identity -- uses defaults since Identity is a monad
-
+instance Validatable Identity a
 --type OptABuilder = Builder Parser Identity
 
 collapse::FV Parser Identity a->Parser a
