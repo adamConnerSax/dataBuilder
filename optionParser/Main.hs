@@ -35,13 +35,13 @@ instance Builder Parser Identity Commands -- uses the generic version via generi
 --deriveBuilder ''Parser ''Commands
 
 
-
+{-
 instance Generic Config
 instance HasDatatypeInfo Config
 instance Builder Parser Identity Config -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
+-}
 
-
---deriveOABuilder ''Config --uses TH to build the instance.  Then you do not need the Generic or HasDatatypeInfo instances
+deriveOABuilder ''Config --uses TH to build the instance.  Then you do not need the Generic or HasDatatypeInfo instances
 
 
 main::IO ()

@@ -7,7 +7,7 @@
 module OptPABuilder
        (
          makeOAParser
---       , deriveOABuilder
+       , deriveOABuilder
        ) where
 
 import           Data.Char             (toLower)
@@ -15,8 +15,8 @@ import           Data.Functor.Identity (Identity (..))
 import           Data.Maybe            (fromJust)
 import           Data.Monoid           ((<>))
 import           Data.Validation       (AccValidation (..))
---import           DataBuilder.TH        (deriveBuilder, handleJustL,
---                                        handleNothingL)
+import           DataBuilder.TH        (deriveBuilder, handleJustL,
+                                         handleNothingL)
 import           DataBuilder.Types
 import           Language.Haskell.TH
 import           Options.Applicative
@@ -67,12 +67,12 @@ instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>Builder Parser Identity
 instance {-# OVERLAPPABLE #-} Builder Parser Identity a=>Builder Parser Identity (Maybe a) where
   buildValidated _ mf mmA = optional $ maybe (buildA mf Nothing) (buildA mf) mmA
 
-{-
+
 deriveOABuilder::Name -> Q [Dec]
 deriveOABuilder typeName = do
-  [d|instance Builder Parser $(conT typeName) where
+  [d|instance Builder Parser Identity $(conT typeName) where
        buildValidated va mf Nothing  = $(handleNothingL typeName) va mf
        buildValidated va mf (Just x) = $(handleJustL typeName) va mf x|]
 
--}
+
 

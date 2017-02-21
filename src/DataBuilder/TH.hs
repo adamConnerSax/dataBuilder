@@ -93,62 +93,46 @@ deriveBuilder builderName typeName = do
        buildValidated va mFN Nothing  = $(handleNothingL typeName) va mFN
        buildValidated va mFN (Just x) = $(handleJustL typeName) va mFN x|]
 
-{-
-The below allows the user to customize the instance with a validator but still use TH to generate the buildA function.
-
-newtype OrderedInts = OrderedInts Int Int
-
-validOI::Validator Text OrderedInts
-validOI oi@(OrderedInts a b) = if (b >= a) then AccSuccess oi else AccFailure "Int out of order"
-
-instance Builder f Text=>Buildable f Text OrderedInts where
-  validateA = validOI
-  buildA = $deriveBuildA ''OrderedInts
-
--}
-
-deriveBuildA::Name->Q [Dec]
-deriveBuildA typeName = [d|
-  buildValidated va mFN Nothing = $(handleNothingL typeName) va mFN
-  buildValidated va mFN (Just x) = $(handleJustL typeName) va mFN x
-  |]
-
 
 handleNothingL::Name->Q Exp
 handleNothingL n = do
+  vaN <- newName "va"
   mfN <- newName "mf"
-  let patsQ = [return $ VarP mfN]
+  let patsQ = return <$> [VarP vaN, VarP mfN]
       mfE = VarE mfN
-  lamE patsQ (handleNothing n mfE)
+      vaE = VarE vaN
+  lamE patsQ (handleNothing n vaE mfE)
 
-handleNothing::Name->Exp->Q Exp
-handleNothing n mfE = do
-  blankBuildersMap <- buildAllBlankBuilders n mfE
+handleNothing::Name->Exp->Exp->Q Exp
+handleNothing n vaE mfE = do
+  blankBuildersMap <- buildAllBlankBuilders n vaE mfE
   [e|internalSum $(listE . snd . unzip . M.toList $ blankBuildersMap)|]
 
 handleJustL::Name->Q Exp
 handleJustL n = do
+  vaN <- newName "va"
   mfN <- newName "mf"
   aN <- newName "a"
-  let patsQ = return <$> [VarP mfN, VarP aN]
+  let patsQ = return <$> [VarP vaN, VarP mfN, VarP aN]
+      vaE = VarE vaN
       mfE = VarE mfN
-      aE = VarE aN
-  lamE patsQ (handleJust n mfE aE)
+      aE = VarE aN     
+  lamE patsQ (handleJust n vaE mfE aE)
 
-handleJust::Name->Exp->Exp->Q Exp
-handleJust n mfE varAE = do
+handleJust::Name->Exp->Exp->Exp->Q Exp
+handleJust n vaE mfE varAE = do
   cons <- lookupType n
-  blankBuildersMap <- buildAllBlankBuilders n mfE
-  let matchBuilder con = buildCaseMatch mfE con blankBuildersMap
+  blankBuildersMap <- buildAllBlankBuilders n vaE mfE
+  let matchBuilder con = buildCaseMatch vaE mfE con blankBuildersMap
   matches <- mapM matchBuilder cons
   return $ CaseE varAE matches
 
-buildAllBlankBuilders::Name->Exp->Q (M.Map ConId ExpQ)
-buildAllBlankBuilders n mfE = do
+buildAllBlankBuilders::Name->Exp->Exp->Q (M.Map ConId ExpQ)
+buildAllBlankBuilders n vaE mfE = do
   cons <- lookupType n
   let first (x,_,_) = x
   cnames <- (fmap first) <$> (mapM conNameAndTypes cons)
-  let bldrs = map (buildBlankBuilder mfE) cons
+  let bldrs = map (buildBlankBuilder vaE mfE) cons
       cids = map nameBase cnames
   return $ M.fromList (zip cids bldrs)
 
@@ -171,20 +155,22 @@ builderPre mfE c = do
         Just fnames -> map (appE [e|Just|] . sToE' . nameBase) fnames
   return (n,tl,conMetaE,conFE,mfEs)
 
-buildBlankBuilder::Exp->Con->Q Exp
-buildBlankBuilder mfE c = do
+buildBlankBuilder::Exp->Exp->Con->Q Exp
+buildBlankBuilder vaE mfE c = do
   (n,tl,conMetaE,conFE,mfEs) <- builderPre mfE c
   let bldrs = map (appE [e|flip buildA Nothing|]) mfEs
-      bldr = foldl (\e1 e2 -> [e|(<*>)|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
+      bldr' = foldl (\e1 e2 -> [e|(<*>)|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
+      bldr = [e|validateFV|] `appE` (return vaE) `appE` bldr' 
   [e|MDWrapped False $conMetaE $bldr|]
 
 
-buildCaseMatch::Exp->Con->M.Map ConId ExpQ->Q Match
-buildCaseMatch mfE c builderMap = do
+buildCaseMatch::Exp->Exp->Con->M.Map ConId ExpQ->Q Match
+buildCaseMatch vaE mfE c builderMap = do
   (n,tl,conMetaE,conFE,mfEs) <- builderPre mfE c
   ns <- mapM (\ty->newName $ fromJust (typeVarName ty)) tl
   let bldrs = map (appE [e|\(mf,v)-> buildA mf (Just v)|]) (zipE mfEs (varE <$> ns))
-      bldr = foldl (\e1 e2 -> [e|(<*>)|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
+      bldr' = foldl (\e1 e2 -> [e|(<*>)|] `appE` e1 `appE` e2) conFE bldrs --This has to fold over Exps, otherwise bApply has multiple types during the fold
+      bldr = [e|validateFV|] `appE` (return vaE) `appE` bldr'
       mdwE = [e|MDWrapped True $conMetaE $bldr|]
       newMap = M.insert (nameBase n) mdwE builderMap
       summedE = [e|internalSum $(listE . snd . unzip . M.toList $ newMap)|]
