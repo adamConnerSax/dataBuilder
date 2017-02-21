@@ -19,6 +19,7 @@ library
   build-depends:       base >= 4.7 && < 5
                      , dataBuilder
                      , template-haskell
+                     , validation
                      , optparse-applicative
   default-language:    Haskell2010
 
@@ -28,6 +29,7 @@ executable dbOptParseExample
                   base -any
                 , template-haskell -any
                 , dataBuilder
+                , text
                 , dataBuilder-optionParser
                 , optparse-applicative
     default-language: Haskell2010
