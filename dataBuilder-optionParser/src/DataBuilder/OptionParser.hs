@@ -8,6 +8,7 @@ module DataBuilder.OptionParser
        (
          makeOAParser
        , deriveOABuilder
+       , Identity
        ) where
 
 import           Data.Char             (toLower)
