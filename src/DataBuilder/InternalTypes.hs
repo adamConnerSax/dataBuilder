@@ -53,31 +53,18 @@ import qualified Generics.SOP         as GSOP
 
 type FieldName = String
 type ConName = String
-type Validator g v a = g a -> Compose g v a
+type Validator v a = a -> v a
 
+type FV f v = Compose f v
 
-
-
-type GV g v = Compose g v
-type FGV f g v = Compose f (GV g v)
-{-
-makeGV::g (v a) -> GV g v a
+makeFV::f (v a) -> FV f v a
 makeFV = Compose
 
-unGV::GV g v a -> g (v a)
-unGV = getCompose
+unFV::FV f v a -> f (v a)
+unFV = getCompose
 
-
-makeFGV::f (GV g v a) -> FGV f g v a
-makeFGV = Compose
-
-unFGV::FGV f g v a->f (GV g v a)
-unFGV = getCompose
-
-fToFV::(Functor f, Applicative v)=>f a -> FV f v a
-fToFV = makeFV . fmap pure
--}
-
+fToFV::(Functor f, MonadLike v)=>f a -> FV f v a
+fToFV = makeFV . fmap pureLike
 
 
 {- NB: these look monadish but v may not be a monad but have reasonable definitions of these, e.g., AccValidate -}
@@ -89,8 +76,8 @@ class MonadLike f where
   default joinLike::Monad f=>f (f a) -> f a
   joinLike = join
 
-validategv::(Functor g, Functor v, MonadLike g)=>Validator g v a ->f (Compose g v a) -> f (Compose g v a)
-validategv va = fmap (Compose . joinLike) . getCompose . fmap (getCompose . va) . Compose . fmap getCompose
+validatefv::(Functor f,Functor v,MonadLike v)=>Validator v a ->f (v a) -> f (v a)
+validatefv va = fmap joinLike . getCompose . fmap va . Compose
 
 validateFV::(Functor f,Functor v,MonadLike v)=>Validator v a ->FV f v a -> FV f v a
 validateFV va = Compose . (fmap joinLike) . getCompose . fmap va
