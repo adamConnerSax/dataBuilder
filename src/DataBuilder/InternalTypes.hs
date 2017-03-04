@@ -81,15 +81,12 @@ class MonadLike f where
   default joinLike::Monad f=>f (f a) -> f a
   joinLike = join
 
-{-
-class Collapsible v g where
-  collapse::v (g (v a))->g (v a)
-  default collapse::(MonadLike v, Traversable v, Applicative g)=>v (g (v a)) -> g (v a)
-  collapse = fmap joinLike . sequenceA
--}
 
 validate::(Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
 validate f = fmap (joinLike . fmap f) 
+
+fmapComposed::(Functor f, Functor g)=>(a->b) -> f (g a)-> f (g b)
+fmapComposed f = getCompose . fmap f . Compose
 
 {-
 validatefv::(Functor f,Functor v,MonadLike v)=>Validator v a ->f (v a) -> f (v a)
@@ -99,9 +96,19 @@ validateFV::(Functor f,Functor v,MonadLike v)=>Validator v a ->FV f v a -> FV f 
 validateFV va = Compose . (fmap joinLike) . getCompose . fmap va
 -}
 
-newtype FGV f g v a = FGV { unFGV::f (g (v a)) }  
+newtype FGV f g v a = FGV { unFGV::f (g (v a)) }
 
-data MDWrapped f g v a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FGV f g v a }
+comp2 = Compose . Compose
+gcomp2 = getCompose . getCompose
+
+instance (Functor f, Functor g, Functor v)=>Functor (FGV f g v) where
+  fmap f = FGV . gcomp2 . fmap f . comp2 . unFGV
+
+instance (Applicative f, Applicative g, Applicative v)=>Applicative (FGV f g v) where
+  pure = FGV . gcomp2 . pure 
+  fgvF <*> fgvA = FGV $ gcomp2  (comp2 (unFGV fgvF) <*> comp2 (unFGV fgvA))
+
+data MDWrapped f g v a = MDWrapped { hasDefault::Bool, metadata::(g ConName,Maybe FieldName), value::FGV f g v a }
 
 class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
   bFail::String->FGV f g v a -- if there's a graceful way to handle errors...
