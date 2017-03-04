@@ -4,10 +4,13 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE TypeSynonymInstances  #-}
+{-# LANGUAGE UndecidableInstances  #-}
 module DataBuilder.OptionParser
        (
          makeOAParser
-       , deriveOABuilder
+--       , deriveOABuilder
        , Identity
        ) where
 
@@ -22,37 +25,71 @@ import           DataBuilder.Types
 import           Language.Haskell.TH
 import           Options.Applicative
 
-instance MonadLike Identity -- uses defaults since Identity is a monad
+--instance MonadLike Identity -- uses defaults since Identity is a monad
 instance Validatable Identity a
 --type OptABuilder = Builder Parser Identity
 
-collapse::FV Parser Identity a->Parser a
-collapse = fmap runIdentity . unFV
+type DBOAParser = FGV Parser Identity Identity
 
-makeOAParser::Builder Parser Identity a=>Maybe a->Parser a
-makeOAParser = collapse . buildA Nothing
+type MDWrappedOA a = MDWrapped Parser Identity Identity a
 
-instance Buildable Parser Identity where
-  bFail msg = fToFV $ abortOption (ErrorMsg $ msg) mempty <*> option disabled mempty
+collapse::DBOAParser a->Parser a
+collapse = fmap runIdentity . fmap runIdentity . unFGV
+
+type OABuilderC a = Builder Parser Identity Identity a
+
+class ParserBuilder a where
+  buildParser::Maybe FieldName->Maybe a->DBOAParser a
+
+instance ParserBuilder a=>Builder Parser Identity Identity a where
+  buildValidated _ mf = buildParser mf . fmap runIdentity 
+  
+makeOAParser::OABuilderC a=>Maybe a->Parser a
+makeOAParser = collapse . buildA Nothing . fmap pure
+
+instance Buildable Parser Identity Identity where
+  bFail msg = fToFGV $ abortOption (ErrorMsg $ msg) mempty <*> option disabled mempty
   bSum = sumToCommand
+  bCollapse = runIdentity
+  bDistributeList = Identity . fmap runIdentity
+  
 
 -- derive a command parser from a sum-type
-sumToCommand::[MDWrapped Parser Identity a]->FV Parser Identity a
+sumToCommand::[MDWrappedOA a]->DBOAParser a
 sumToCommand mdws =
   let makeCommand mdw = command (fst . metadata $ mdw) (info (collapse $ DataBuilder.Types.value mdw) mempty)
-  in fToFV $ subparser $ mconcat (map makeCommand mdws)
+  in fToFGV $ subparser $ mconcat (map makeCommand mdws)
 
 --shortAndLong::HasName f=>String->Mod f a
 shortAndLong x = long x <> short (head x)
 
-parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Maybe FieldName->Maybe a->FV Parser Identity a
+parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Maybe FieldName->Maybe a->DBOAParser a
 parseReadable reader mHelp mf ma =
-  fToFV $ case mf of
+  fToFGV $ case mf of
     Nothing->argument reader ((maybe mempty Options.Applicative.value ma) <> (maybe mempty help mHelp))
     Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> (maybe mempty help mHelp))
 
-instance Builder Parser Identity Int where
-  buildValidated _ = parseReadable auto (Just "Int")
+instance ParserBuilder Int where
+  buildParser = parseReadable auto (Just "Int") 
+
+instance ParserBuilder Double where
+  buildParser = parseReadable auto (Just "Double")
+
+instance ParserBuilder String where
+  buildParser = parseReadable str (Just "String")
+
+instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>ParserBuilder e where
+  buildParser mf mE = fToFGV $ foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
+    fl = maybe flag' flag mE
+    optDesc = maybe mempty help mf
+
+instance {-# OVERLAPPABLE #-} ParserBuilder a=>ParserBuilder (Maybe a) where
+  buildParser mf mmA = fToFGV . optional . collapse $ maybe (buildParser mf Nothing) (buildParser mf) mmA
+
+
+{-
+instance Builder Parser Identity Identity Int where
+  buildValidated _ mf = parseReadable auto (Just "Int") mf . fmap runIdentity 
 
 instance Builder Parser Identity Double where
   buildValidated _ = parseReadable auto (Just "Double")
@@ -75,5 +112,5 @@ deriveOABuilder typeName = do
        buildValidated va mf Nothing  = $(handleNothingL typeName) va mf
        buildValidated va mf (Just x) = $(handleJustL typeName) va mf x|]
 
-
+-}
 
