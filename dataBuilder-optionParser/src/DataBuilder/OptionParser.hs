@@ -6,10 +6,12 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
+{-# LANGUAGE DefaultSignatures     #-}
 {-# LANGUAGE UndecidableInstances  #-}
 module DataBuilder.OptionParser
        (
          makeOAParser
+       , ParserBuilder(..)
 --       , deriveOABuilder
        , Identity
        ) where
@@ -40,6 +42,8 @@ type OABuilderC a = Builder Parser Identity Identity a
 
 class ParserBuilder a where
   buildParser::Maybe FieldName->Maybe a->DBOAParser a
+  default buildParser::(GBuilder Parser Identity Identity a, Validatable Identity a)=>Maybe FieldName->Maybe a->DBOAParser a
+  buildParser mFN = gBuildValidated validator mFN . fmap Identity
 
 instance ParserBuilder a=>Builder Parser Identity Identity a where
   buildValidated _ mf = buildParser mf . fmap runIdentity 

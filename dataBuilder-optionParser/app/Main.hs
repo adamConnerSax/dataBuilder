@@ -29,7 +29,7 @@ data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mo
 data Commands = DoA {aFile::String} | DoB {bFile::String, bFlag::Bool} deriving (Show,GHCG.Generic)
 instance Generic Commands
 instance HasDatatypeInfo Commands
-instance Builder Parser Identity Identity Commands -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
+instance ParserBuilder Commands -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
 
 --data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show,GHCG.Generic)
 --deriveBuilder ''Parser ''Commands
@@ -38,7 +38,7 @@ instance Builder Parser Identity Identity Commands -- uses the generic version v
 
 instance Generic Config
 instance HasDatatypeInfo Config
-instance Builder Parser Identity Identity Config -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
+instance ParserBuilder  Config -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
 
 
 --deriveOABuilder ''Config --uses TH to build the instance.  Then you do not need the Generic or HasDatatypeInfo instances
