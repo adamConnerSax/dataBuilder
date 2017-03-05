@@ -27,9 +27,7 @@ import           DataBuilder.Types
 import           Language.Haskell.TH
 import           Options.Applicative
 
---instance MonadLike Identity -- uses defaults since Identity is a monad
 instance Validatable Identity a
---type OptABuilder = Builder Parser Identity
 
 type DBOAParser = FGV Parser Identity Identity
 
