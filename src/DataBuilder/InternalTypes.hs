@@ -27,10 +27,6 @@ module DataBuilder.InternalTypes
   , Validator
   , Validatable(..)
   , FGV(..)
-  {-
-  , makeFV
-  , unFV
--}
   , fToFGV
   , Buildable(..)
   , Builder(..)
@@ -39,10 +35,6 @@ module DataBuilder.InternalTypes
   , buildAFromConList
   , validate
   , validateFGV
-  {-
-  , validateFV
-  , validatefv
--}
   , MonadLike(..)
     -- * Not exposed outside the library
   , internalSum
@@ -62,18 +54,6 @@ type FieldName = String
 type ConName = String
 type Validator v a = a -> v a
 
-{-
-type FV f v = Compose f v
-
-makeFV::f (v a) -> FV f v a
-makeFV = Compose
-
-unFV::FV f v a -> f (v a)
-unFV = getCompose
--}
-
-fToFGV::(Functor f, MonadLike v, MonadLike g)=>f a -> FGV f g v a
-fToFGV = FGV . fmap (pureLike . pureLike)
 
 {- NB: these look monadish but f may not be a monad but have reasonable definitions of these, e.g., AccValidate -}
 class MonadLike f where
@@ -89,35 +69,32 @@ instance MonadLike Identity
 validate::(Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
 validate f = fmap (joinLike . fmap f) 
 
-validateFGV::(Functor f, Functor g, Functor v, MonadLike v)=>Validator v a->FGV f g v a->FGV f g v a
-validateFGV va = FGV . fmap (validate va) . unFGV
 
 fmapComposed::(Functor f, Functor g)=>(a->b) -> f (g a)-> f (g b)
 fmapComposed f = getCompose . fmap f . Compose
 
-{-
-validatefv::(Functor f,Functor v,MonadLike v)=>Validator v a ->f (v a) -> f (v a)
-validatefv va = fmap joinLike . getCompose . fmap va . Compose
-
-validateFV::(Functor f,Functor v,MonadLike v)=>Validator v a ->FV f v a -> FV f v a
-validateFV va = Compose . (fmap joinLike) . getCompose . fmap va
--}
-
 newtype FGV f g v a = FGV { unFGV::f (g (v a)) }
 
-comp2 = Compose . Compose
-gcomp2 = getCompose . getCompose
+fToFGV::(Functor f, MonadLike v, MonadLike g)=>f a -> FGV f g v a
+fToFGV = FGV . fmap (pureLike . pureLike)
+
+validateFGV::(Functor f, Functor g, Functor v, MonadLike v)=>Validator v a->FGV f g v a->FGV f g v a
+validateFGV va = FGV . fmap (validate va) . unFGV
+
+
+fgvToComposed = Compose . Compose . unFGV
+composedToFGV = FGV . getCompose . getCompose
 
 instance (Functor f, Functor g, Functor v)=>Functor (FGV f g v) where
-  fmap f = FGV . gcomp2 . fmap f . comp2 . unFGV
+  fmap f = composedToFGV . fmap f . fgvToComposed
 
 instance (Applicative f, Applicative g, Applicative v)=>Applicative (FGV f g v) where
-  pure = FGV . gcomp2 . pure 
-  fgvF <*> fgvA = FGV $ gcomp2  (comp2 (unFGV fgvF) <*> comp2 (unFGV fgvA))
+  pure = composedToFGV . pure 
+  fgvF <*> fgvA = composedToFGV  (fgvToComposed fgvF <*> fgvToComposed fgvA)
 
 instance (Alternative f, Alternative g, Applicative f, Applicative g, Applicative v)=>Alternative (FGV f g v) where
-  empty = FGV . gcomp2 $ empty
-  fgvA <|> fgvB = FGV . gcomp2 $ (comp2 . unFGV $ fgvA) <|> (comp2 . unFGV $ fgvB) 
+  empty = composedToFGV empty
+  fgvA <|> fgvB = composedToFGV $ fgvToComposed fgvA <|> fgvToComposed fgvB 
 
 
 data MDWrapped f g v a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FGV f g v a }
