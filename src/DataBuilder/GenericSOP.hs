@@ -71,8 +71,10 @@ type GBuilderTopC f g v a = (Buildable f g v, GenericSOPC a, All2 (VBuilderC f g
 
 instance (MonadLike v, GBuilderTopC f g v a)=>GBuilder f g v a where
   gBuildValidated va mf mga = case mga of
-    Nothing -> internalSum $ buildBlanks va mf
-    Just gx  -> let cn = (constructorName x) in internalSum . snd . unzip . M.toList $ M.insert cn (buildDefaulted va mf gx) (buildBlankMap va mf)
+    Nothing -> internalSum' $ buildBlanks va mf
+    Just gx  ->
+      let insertMDW m mdw = M.insert (fst . metadata $ mdw) mdw m
+      in internalSum $ snd . unzip . M.toList . insertMDW (buildBlankMap va mf) <$> (buildDefaulted va mf gx) 
 
 buildBlankMap::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->MdwMap f g v a
 buildBlankMap va = mdwMapFromList . buildBlanks va
@@ -84,7 +86,7 @@ buildBlanks va mf =
           ADT _ tn cs -> (tn,cs)
           Newtype _ tn c -> (tn,(c :* Nil))
         mds = gMakeMDs mf tn cs
-        builders = (fmap (fmap  (validate va . fmap to))) <$> buildBlanks' mf tn cs -- here's where we validate the constructed type (1)
+        builders = FGV . fmap (validate va) . unFGV  . fmap to <$> buildBlanks' mf tn cs -- here's where we validate the constructed type (1)
         mbs = zip mds builders
         makeMDW (md',bldr) = MDWrapped False md' bldr
     in makeMDW <$> mbs
@@ -112,30 +114,39 @@ buildBlank mf tn ci =
                  builder fi = buildA (fi2mf fi) Nothing
              in hcliftA builderC builder fns
 
-buildDefaulted::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->g a->MDWrapped f g v a
-buildDefaulted va mf ga =
-  let gcn = constructorName a
+
+buildDefaulted::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->g a->g (MDWrapped f g v a)
+buildDefaulted va mf = fmap (buildDefaulted' va mf)
+
+buildDefaulted'::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->a->MDWrapped f g v a
+buildDefaulted' va mf a =
+  let cn = constructorName' a
       allBuilder = Proxy :: Proxy (All (VBuilderC f g v))
       (tn,cs) = case datatypeInfo (Proxy :: Proxy a) of
         ADT _ tn cs -> (tn,cs)
         Newtype _ tn c -> (tn,(c :* Nil))
-      sopf   = SOP $ hcliftA2 allBuilder (buildDefFromConInfo mf tn) cs (unSOP . from <$> ga) -- SOP (VF f e) xss
-      vfa = validateFV va . fmap to . hsequence $ sopf   -- here's where we validate the constructed type (2)
-  in MDWrapped True (gcn,mf) vfa
+      sopf   = SOP $ hcliftA2 allBuilder (buildDefFromConInfo mf tn) cs (unSOP $ from a) -- SOP (FGV f g v) xss
+      vfa = validateFGV va . fmap to . hsequence $ sopf   -- here's where we validate the constructed type (2)
+  in MDWrapped True (cn,mf) vfa
 
 
-buildDefFromConInfo::forall f g v xs.(MonadLike v, GBuilderC1 f g v xs)=>Maybe FieldName->DatatypeName->ConstructorInfo xs->NP g xs->NP (FGV f g v) xs
+buildDefFromConInfo::forall f g v xs.(MonadLike v, GBuilderC1 f g v xs)
+  =>Maybe FieldName
+  ->DatatypeName
+  ->ConstructorInfo xs -- constructor info for each field
+  ->NP I xs -- value in each field as an NP I
+  ->NP (FGV f g v) xs -- built value in each field as an NP (FGV f g v)
 buildDefFromConInfo md tn ci args =
   let fieldNames = ci2RecordNames ci
-      builderC = Proxy :: Proxy (VBuilderC f v)
+      builderC = Proxy :: Proxy (VBuilderC f g v)
   in case fieldNames of
       Nothing ->
-        let builder::(MonadLike v, Builder f g v a,Validatable v a)=>g a -> FGV f g v a
-            builder ga = buildA Nothing (Just ga)
+        let builder::(MonadLike v, Builder f g v a,Validatable v a)=>I a -> FGV f g v a
+            builder a = buildA Nothing (Just $ pure (unI a))
         in hcliftA builderC builder args
       Just fns ->
-        let builder::(MonadLike v, Builder f v a, Validatable v a)=>FieldInfo a->g a->FGV f g v a
-            builder fi ga = buildA (fi2mf fi) (Just ga)
+        let builder::(MonadLike v, Builder f g v a, Validatable v a)=>FieldInfo a->I a->FGV f g v a
+            builder fi a = buildA (fi2mf fi) (Just $ pure (unI a))
         in hcliftA2 builderC builder fns args
 
 

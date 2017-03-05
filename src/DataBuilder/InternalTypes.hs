@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP                     #-}
 {-# LANGUAGE DefaultSignatures       #-}
 {-# LANGUAGE FlexibleContexts        #-}
-{-# LANGUAGE FunctionalDependencies  #-}
 {-# LANGUAGE MultiParamTypeClasses   #-}
 {-# LANGUAGE RankNTypes              #-}
 #if __GLASGOW_HASKELL__ >= 800
@@ -31,13 +30,15 @@ module DataBuilder.InternalTypes
   {-
   , makeFV
   , unFV
-  , fToFV
 -}
+  , fToFGV
   , Buildable(..)
   , Builder(..)
   , buildA
   , GBuilder(..)
   , buildAFromConList
+  , validate
+  , validateFGV
   {-
   , validateFV
   , validatefv
@@ -45,10 +46,12 @@ module DataBuilder.InternalTypes
   , MonadLike(..)
     -- * Not exposed outside the library
   , internalSum
+  , internalSum'
   ) where
 
 import           Control.Applicative  (Alternative (..))
 import           Control.Monad        (join)
+import           Data.Functor.Identity (Identity)
 import           Data.Functor.Compose (Compose (..))
 import           Data.Maybe           (isJust)
 import           Data.Semigroup       (Semigroup)
@@ -67,10 +70,10 @@ makeFV = Compose
 
 unFV::FV f v a -> f (v a)
 unFV = getCompose
-
-fToFV::(Functor f, MonadLike v)=>f a -> FV f v a
-fToFV = makeFV . fmap pureLike
 -}
+
+fToFGV::(Functor f, MonadLike v, MonadLike g)=>f a -> FGV f g v a
+fToFGV = FGV . fmap (pureLike . pureLike)
 
 {- NB: these look monadish but f may not be a monad but have reasonable definitions of these, e.g., AccValidate -}
 class MonadLike f where
@@ -81,9 +84,13 @@ class MonadLike f where
   default joinLike::Monad f=>f (f a) -> f a
   joinLike = join
 
+instance MonadLike Identity
 
 validate::(Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
 validate f = fmap (joinLike . fmap f) 
+
+validateFGV::(Functor f, Functor g, Functor v, MonadLike v)=>Validator v a->FGV f g v a->FGV f g v a
+validateFGV va = FGV . fmap (validate va) . unFGV
 
 fmapComposed::(Functor f, Functor g)=>(a->b) -> f (g a)-> f (g b)
 fmapComposed f = getCompose . fmap f . Compose
@@ -108,12 +115,26 @@ instance (Applicative f, Applicative g, Applicative v)=>Applicative (FGV f g v) 
   pure = FGV . gcomp2 . pure 
   fgvF <*> fgvA = FGV $ gcomp2  (comp2 (unFGV fgvF) <*> comp2 (unFGV fgvA))
 
-data MDWrapped f g v a = MDWrapped { hasDefault::Bool, metadata::(g ConName,Maybe FieldName), value::FGV f g v a }
+instance (Alternative f, Alternative g, Applicative f, Applicative g, Applicative v)=>Alternative (FGV f g v) where
+  empty = FGV . gcomp2 $ empty
+  fgvA <|> fgvB = FGV . gcomp2 $ (comp2 . unFGV $ fgvA) <|> (comp2 . unFGV $ fgvB) 
+
+
+data MDWrapped f g v a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FGV f g v a }
 
 class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
   bFail::String->FGV f g v a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f g v a]->FGV f g v a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
+  bCollapse::g (FGV f g v a)->FGV f g v a  -- being able to do this is crucial to allowing (g a) as input
+  default bCollapse::(Traversable g, MonadLike g)=>g (FGV f g v a) -> FGV f g v a
+  bCollapse = FGV . fmap joinLike . sequenceA . fmap unFGV
+
+  bDistributeList::[g (MDWrapped f g v a)] -> g [MDWrapped f g v a] -- in order to hand-write constructors. Might be better ways than sequenceA
+  default bDistributeList::Traversable g=>[g (MDWrapped f g v a)] -> g [MDWrapped f g v a]
+  bDistributeList = sequenceA
+
+  
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g v a where
   gBuildValidated::Buildable f g v=>Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
 
@@ -132,11 +153,14 @@ class Buildable f g v => Builder f g v a  where
 buildA::(Builder f g v a,MonadLike v,Validatable v a)=>Maybe FieldName->Maybe (g a)-> FGV f g v a
 buildA = buildValidated validator
 
-buildAFromConList::Buildable f g v=>[(Validator v a->Maybe FieldName->Maybe (g a)->MDWrapped f g v a)]->Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
-buildAFromConList conList va mFN mga  = internalSum $ fmap (\q->q va mFN mga) conList
+buildAFromConList::Buildable f g v=>[Validator v a->Maybe FieldName->Maybe (g a)->g (MDWrapped f g v a)]->Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
+buildAFromConList conList va mFN mga  = internalSum . bDistributeList $ fmap (\q->q va mFN mga) conList
 
-internalSum::Buildable f g v=>[MDWrapped f g v a]->FGV f g v a
-internalSum mdws = case length mdws of
+internalSum::Buildable f g v=>g [MDWrapped f g v a]->FGV f g v a
+internalSum = bCollapse . fmap internalSum'
+
+internalSum'::Buildable f g v=>[MDWrapped f g v a]->FGV f g v a
+internalSum' mdws = case length mdws of
   0 -> bFail "No Constructors in sum (this shouldn't happen!)."
   1 -> value (head mdws)
   _ -> bSum mdws
