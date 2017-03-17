@@ -37,7 +37,7 @@ module DataBuilder.InternalTypes
   , validateFGV
   , MonadLike(..)
     -- * Not exposed outside the library
-  , internalSum
+--  , internalSum
   , internalSum'
   ) where
 
@@ -111,6 +111,9 @@ class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
   default bDistributeList::Traversable g=>[g (MDWrapped f g v a)] -> g [MDWrapped f g v a]
   bDistributeList = sequenceA
 
+  bCollapseAndSum::g [MDWrapped f g v a] -> FGV f g v a
+  bCollapseAndSum = bCollapse . fmap internalSum' 
+
   
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g v a where
   gBuildValidated::Buildable f g v=>Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
@@ -131,10 +134,10 @@ buildA::(Builder f g v a,MonadLike v,Validatable v a)=>Maybe FieldName->Maybe (g
 buildA = buildValidated validator
 
 buildAFromConList::Buildable f g v=>[Validator v a->Maybe FieldName->Maybe (g a)->g (MDWrapped f g v a)]->Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
-buildAFromConList conList va mFN mga  = internalSum . bDistributeList $ fmap (\q->q va mFN mga) conList
+buildAFromConList conList va mFN mga  = bCollapseAndSum $ bDistributeList $ fmap (\q->q va mFN mga) conList
 
-internalSum::Buildable f g v=>g [MDWrapped f g v a]->FGV f g v a
-internalSum = bCollapse . fmap internalSum'
+--internalSum::Buildable f g v=>g [MDWrapped f g v a]->FGV f g v a
+--internalSum = bCollapse . fmap internalSum'
 
 internalSum'::Buildable f g v=>[MDWrapped f g v a]->FGV f g v a
 internalSum' mdws = case length mdws of

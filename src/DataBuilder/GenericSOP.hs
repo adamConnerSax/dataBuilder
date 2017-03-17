@@ -5,6 +5,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE KindSignatures        #-}
+{-# LANGUAGE DataKinds             #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.GenericSOP
@@ -34,8 +36,23 @@ import           Generics.SOP              as GSOP (Generic, HasDatatypeInfo)
 import           Generics.SOP.TH           (deriveGeneric)
 import qualified GHC.Generics              as GHC
 
+import qualified GHC.TypeLits as TL
+import qualified Data.Dependent.Sum as DS
+import Data.GADT.Compare (GEq(..))
 --
 import           DataBuilder.InternalTypes
+
+
+data ConTag::[*] -> * where
+  ConTag::[*]
+  
+
+  
+  
+  
+instance GEq ConTag where
+  geq (ConTag (TL.SomeSymbol s1)) (ConTag (TL.SomeSymbol s2)) = TL.sameSymbol s1 s2
+  
 
 ci2name::ConstructorInfo xs-> ConName
 ci2name (Constructor cn) = cn
@@ -74,7 +91,7 @@ instance (MonadLike v, GBuilderTopC f g v a)=>GBuilder f g v a where
     Nothing -> internalSum' $ buildBlanks va mf
     Just gx  ->
       let insertMDW m mdw = M.insert (fst . metadata $ mdw) mdw m
-      in internalSum $ snd . unzip . M.toList . insertMDW (buildBlankMap va mf) <$> (buildDefaulted va mf gx) 
+      in bCollapseAndSum $ snd . unzip . M.toList . insertMDW (buildBlankMap va mf) <$> (buildDefaulted va mf gx) 
 
 buildBlankMap::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->MdwMap f g v a
 buildBlankMap va = mdwMapFromList . buildBlanks va
@@ -114,6 +131,11 @@ buildBlank mf tn ci =
                  builder fi = buildA (fi2mf fi) Nothing
              in hcliftA builderC builder fns
 
+
+{-
+buildDefaultedDS::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->g a->g (DS.DSum (ConTag a) g) 
+buildDefaultedDS va mf ga = 
+-}
 
 buildDefaulted::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->g a->g (MDWrapped f g v a)
 buildDefaulted va mf = fmap (buildDefaulted' va mf)
