@@ -7,6 +7,7 @@
 {-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE TypeOperators         #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.GenericSOP
@@ -36,23 +37,31 @@ import           Generics.SOP              as GSOP (Generic, HasDatatypeInfo)
 import           Generics.SOP.TH           (deriveGeneric)
 import qualified GHC.Generics              as GHC
 
-import qualified GHC.TypeLits as TL
+--import qualified GHC.TypeLits as TL
+--import qualified Data.Singletons as S
 import qualified Data.Dependent.Sum as DS
-import Data.GADT.Compare (GEq(..))
+import Data.GADT.Compare ((:~:)(..),GEq(..) {-,GOrd(..) -})
 --
 import           DataBuilder.InternalTypes
 
 
-data ConTag::[*] -> * where
-  ConTag::[*]
+-- some preliminaries for type-level tags for the constructors of sum types
+-- Can we just use NS or NP itself??
+-- I don't think so, or at least we don't want to.  We need a type that encodes the set of constructors
+-- I think we want to use NP ConstructorInfo xs
+data NPTag q np qxs where
+  Here  :: NPTag q (NP q (xs ': xss)) (q xs)
+  There :: NPTag q (NP q xss) (q xs) -> NPTag q (NP q (xs' ': xss)) (q xs) 
+  
+instance GEq (NPTag q np) where
+  geq Here      Here      = Just Refl
+  geq (There x) (There y) = geq x y
+  geq _         _         = Nothing
   
 
-  
-  
-  
-instance GEq ConTag where
-  geq (ConTag (TL.SomeSymbol s1)) (ConTag (TL.SomeSymbol s2)) = TL.sameSymbol s1 s2
-  
+instance DS.EqTag (NPTag I np) I where
+  eqTagged Here Here = (==)
+  eqTagged (There x) (There y) = (==)
 
 ci2name::ConstructorInfo xs-> ConName
 ci2name (Constructor cn) = cn

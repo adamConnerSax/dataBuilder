@@ -28,6 +28,7 @@ library
                 , template-haskell -any
                 , generics-sop >=0.2.1
                 , dependent-sum >= 0.4
+                , singletons
                 , validation -any
                 , containers -any
     default-language: Haskell2010
