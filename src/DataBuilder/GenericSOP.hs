@@ -50,18 +50,19 @@ import           DataBuilder.InternalTypes
 -- I don't think so, or at least we don't want to.  We need a type that encodes the set of constructors
 -- I think we want to use NP ConstructorInfo xs
 data NPTag (xss :: [[*]]) (xs :: [*]) where
-  Here  :: NPTag (xs ': xss)) xs
+  Here  :: NPTag (xs ': xss) xs
   There :: NPTag xss xs -> NPTag (xs ': xss) xs 
   
-instance GEq (NPTag q np) where
+instance GEq (NPTag xss) where
   geq Here      Here      = Just Refl
   geq (There x) (There y) = geq x y
   geq _         _         = Nothing
   
-
+{-
 instance DS.EqTag (NPTag I np) I where
   eqTagged Here Here = (==)
   eqTagged (There x) (There y) = (==)
+-}
 
 ci2name::ConstructorInfo xs-> ConName
 ci2name (Constructor cn) = cn
