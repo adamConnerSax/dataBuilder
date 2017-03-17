@@ -49,9 +49,9 @@ import           DataBuilder.InternalTypes
 -- Can we just use NS or NP itself??
 -- I don't think so, or at least we don't want to.  We need a type that encodes the set of constructors
 -- I think we want to use NP ConstructorInfo xs
-data NPTag q np qxs where
-  Here  :: NPTag q (NP q (xs ': xss)) (q xs)
-  There :: NPTag q (NP q xss) (q xs) -> NPTag q (NP q (xs' ': xss)) (q xs) 
+data NPTag (xss :: [[*]]) (xs :: [*]) where
+  Here  :: NPTag (xs ': xss)) xs
+  There :: NPTag xss xs -> NPTag (xs ': xss) xs 
   
 instance GEq (NPTag q np) where
   geq Here      Here      = Just Refl
