@@ -58,11 +58,11 @@ instance GEq (NPTag xss) where
   geq (There x) (There y) = geq x y
   geq _         _         = Nothing
   
-{-
-instance DS.EqTag (NPTag I np) I where
-  eqTagged Here Here = (==)
+
+instance All2 (Compose Eq FieldInfo) xss=> DS.EqTag (NPTag xss) ConstructorInfo where
+  eqTagged Here      Here      = (==)
   eqTagged (There x) (There y) = (==)
--}
+
 
 ci2name::ConstructorInfo xs-> ConName
 ci2name (Constructor cn) = cn
