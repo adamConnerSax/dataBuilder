@@ -51,7 +51,7 @@ import           DataBuilder.InternalTypes
 -- I think we want to use NP ConstructorInfo xs
 data NPTag (xss :: [[*]]) (xs :: [*]) where
   Here  :: NPTag (xs ': xss) xs
-  There :: NPTag xss xs -> NPTag (xs ': xss) xs 
+  There :: NPTag xss xs -> NPTag (y ': xss) xs 
   
 instance GEq (NPTag xss) where
   geq Here      Here      = Just Refl
