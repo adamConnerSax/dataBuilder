@@ -28,6 +28,7 @@ library
                 , template-haskell -any
                 , generics-sop >=0.2.1
                 , dependent-sum >= 0.4
+                , dependent-map >= 0.2.2
                 , singletons
                 , validation -any
                 , containers -any

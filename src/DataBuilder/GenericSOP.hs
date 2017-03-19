@@ -1,13 +1,14 @@
 {-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE KindSignatures        #-}
-{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DataBuilder.GenericSOP
@@ -39,8 +40,10 @@ import qualified GHC.Generics              as GHC
 
 --import qualified GHC.TypeLits as TL
 --import qualified Data.Singletons as S
-import qualified Data.Dependent.Sum as DS
-import Data.GADT.Compare ((:~:)(..),GEq(..) {-,GOrd(..) -})
+import qualified Data.Dependent.Map        as DM
+import qualified Data.Dependent.Sum        as DS
+import           Data.GADT.Compare         ((:~:) (..), GCompare (..), GEq (..),
+                                            GOrdering (..))
 --
 import           DataBuilder.InternalTypes
 
@@ -49,19 +52,44 @@ import           DataBuilder.InternalTypes
 -- Can we just use NS or NP itself??
 -- I don't think so, or at least we don't want to.  We need a type that encodes the set of constructors
 -- I think we want to use NP ConstructorInfo xs
-data NPTag (xss :: [[*]]) (xs :: [*]) where
-  Here  :: NPTag (xs ': xss) xs
-  There :: NPTag xss xs -> NPTag (y ': xss) xs 
-  
-instance GEq (NPTag xss) where
+
+
+-- no good, I think, because the first parameter is changed by a call to There.
+-- That is,
+data NPTag (xs :: [k]) (x :: k) where -- x is in xs
+  Here  :: NPTag (x ': xs) x          -- x begins xs
+  There :: NPTag xs x -> NPTag (y ': xs) x -- given that x is in xs, x is also in (y ': xs)
+
+npToDMap::NP f xs -> DM.DMap (NPTag xs) f
+npToDMap Nil = DM.empty
+npToDMap (fx :* np') = DM.insert Here fx $ DM.mapKeysMonotonic There $ npToDMap np'
+
+
+instance GEq (NPTag xs) where
   geq Here      Here      = Just Refl
   geq (There x) (There y) = geq x y
   geq _         _         = Nothing
-  
+
 
 instance All2 (Compose Eq FieldInfo) xss=> DS.EqTag (NPTag xss) ConstructorInfo where
   eqTagged Here      Here      = (==)
-  eqTagged (There x) (There y) = (==)
+
+instance GCompare (NPTag xs) where
+  gcompare Here Here = GEQ
+  gcompare Here (There _) = GLT
+  gcompare (There _) Here = GGT
+  gcompare (There x) (There y) = gcompare x y
+
+instance (All2 (Compose Eq FieldInfo) xss
+         ,All2 (Compose Ord FieldInfo) xss)=>DS.OrdTag (NPTag xss) ConstructorInfo where
+  compareTagged Here Here = compare
+
+
+ciDMap::forall a xss.(HasDatatypeInfo a, xss ~ Code a)=>a->DM.DMap (NPTag xss) ConstructorInfo
+ciDMap a =
+  let {- ciInfo :: NP ConstructorInfo (Code a) -}
+      ciInfo = constructorInfo $ datatypeInfo (Proxy :: Proxy a) -- NP ConstructorInfo xss
+  in npToDMap ciInfo
 
 
 ci2name::ConstructorInfo xs-> ConName
@@ -101,7 +129,7 @@ instance (MonadLike v, GBuilderTopC f g v a)=>GBuilder f g v a where
     Nothing -> internalSum' $ buildBlanks va mf
     Just gx  ->
       let insertMDW m mdw = M.insert (fst . metadata $ mdw) mdw m
-      in bCollapseAndSum $ snd . unzip . M.toList . insertMDW (buildBlankMap va mf) <$> (buildDefaulted va mf gx) 
+      in bCollapseAndSum $ snd . unzip . M.toList . insertMDW (buildBlankMap va mf) <$> (buildDefaulted va mf gx)
 
 buildBlankMap::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->MdwMap f g v a
 buildBlankMap va = mdwMapFromList . buildBlanks va
@@ -143,8 +171,8 @@ buildBlank mf tn ci =
 
 
 {-
-buildDefaultedDS::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->g a->g (DS.DSum (ConTag a) g) 
-buildDefaultedDS va mf ga = 
+buildDefaultedDS::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->g a->g (DS.DSum (ConTag a) g)
+buildDefaultedDS va mf ga =
 -}
 
 buildDefaulted::forall f g v a.(MonadLike v, GBuilderTopC f g v a) => Validator v a->Maybe FieldName->g a->g (MDWrapped f g v a)
@@ -191,5 +219,5 @@ constructorName' a =
         ADT _ tn cs -> cs
         Newtype _ tn c -> c :* Nil
       getConName::ConstructorInfo xs->NP I xs->K ConName xs
-      getConName ci args = K $ ci2name ci
+      getConName ci _ = K $ ci2name ci
   in hcollapse $ hliftA2 getConName cs (unSOP $ from a)
