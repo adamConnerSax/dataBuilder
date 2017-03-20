@@ -60,10 +60,27 @@ data NPTag (xs :: [k]) (x :: k) where -- x is in xs
   Here  :: NPTag (x ': xs) x          -- x begins xs
   There :: NPTag xs x -> NPTag (y ': xs) x -- given that x is in xs, x is also in (y ': xs)
 
+
+-- This was tricky!
+-- It inserts into a DMap on a shorter type-list, np'
+-- The DMap from the shorter list (np') has proofs that the various x are in the shorter list
+-- adding a "There" proves that x's are in the list which is one element longer, thus making the
+-- new DMap have proofs on the correct list
 npToDMap::NP f xs -> DM.DMap (NPTag xs) f
 npToDMap Nil = DM.empty
 npToDMap (fx :* np') = DM.insert Here fx $ DM.mapKeysMonotonic There $ npToDMap np'
 
+-- Two elt NS
+-- Z (I 'x') :: NS I '[Char, Bool] --> (There Here :=> I 'x')
+-- S (Z (I True) :: NS I '[Char, Bool] --> (Here :=> I True)
+
+nsToDSum::NS f xs -> DS.DSum (NPTag xs) f
+nsToDSum ns = go Here ns where
+  move::DSum (NPTag xs) f -> DSum (NPTag (x ': xs)) f
+  move (tag DS.:=> fx) = ((There tag) DS.:=> fx)
+  go::NPTag xs x -> NS f xs -> DS.DSum (NPTag xs) f
+  go tag (Z fx) = (tag DS.:=> fx)
+  go tag (S ns) = move $ go (There tag) ns
 
 instance GEq (NPTag xs) where
   geq Here      Here      = Just Refl
@@ -87,8 +104,7 @@ instance (All2 (Compose Eq FieldInfo) xss
 
 ciDMap::forall a xss.(HasDatatypeInfo a, xss ~ Code a)=>a->DM.DMap (NPTag xss) ConstructorInfo
 ciDMap a =
-  let {- ciInfo :: NP ConstructorInfo (Code a) -}
-      ciInfo = constructorInfo $ datatypeInfo (Proxy :: Proxy a) -- NP ConstructorInfo xss
+  let ciInfo = constructorInfo $ datatypeInfo (Proxy :: Proxy a) -- NP ConstructorInfo xss
   in npToDMap ciInfo
 
 
