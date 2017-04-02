@@ -47,15 +47,6 @@ import           DataBuilder.InternalTypes
 type VBuilderC f g v = And (Builder f g v) (Validatable v)
 type GBuilderC f g v a = (Buildable f g v, Generic a, HasDatatypeInfo a, All2 (VBuilderC f g v) (Code a))
 
-
-functorToIsConList::(GSOP.Generic a, Functor g)=>g a->[g Bool]
-functorToIsConList ga = ((fmap isJust) . unComp) <$> functorToPerConstructorList id ga
-
-
---  buildValidated::Buildable f g v=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
---  each has buildA::Maybe FieldName->GV g v a->FGV f g v a
-
-
 mFaSGBuilder::forall f g v a.(Generic a,HasDatatypeInfo a
                              , Applicative f
                              , Applicative g
@@ -65,24 +56,17 @@ mFaSGBuilder::forall f g v a.(Generic a,HasDatatypeInfo a
 mFaSGBuilder proxy popGVM =
   let vbuilderC = Proxy :: Proxy (VBuilderC f g v)
       sListIC = Proxy :: Proxy SListI
-      f::SListI xs=>ConstructorInfo xs -> NP (K (Maybe FieldName)) xs
-      f ci = case ci of
-        Record _ npfi -> hmap (\(FieldInfo name) -> K (Just name)) npfi
-        _             -> hpure (K Nothing)
-      popMFNs::POP (K (Maybe FieldName)) (Code a)  
-      popMFNs = POP . hcliftA sListIC f . constructorInfo $ datatypeInfo proxy -- POP (K (Maybe FieldName)) (Code a)
       fixGVM::Functor g=>(GV g v :.: Maybe) x -> GV g v x
       fixGVM = GV . fmap absorbMaybe . unGV . unComp
-  in hcliftA sListIC (Comp . hsequence) . unPOP $ hcliftA2 vbuilderC (\kmfn gvma -> buildA (unK kmfn) (fixGVM gvma)) popMFNs popGVM
+  in hcliftA sListIC (Comp . hsequence) . unPOP $ hcliftA2 vbuilderC (\kmfn gvma -> buildA (unK kmfn) (fixGVM gvma)) (maybeFieldNamePOP proxy) popGVM
   
-
 instance (MonadLike v, MaybeLike v, GBuilderC f g v a)=>GBuilder f g v a where
   gBuildValidated valA mf gva = 
     let proxyA = Proxy :: Proxy a
-        isConList   = fmap (fromMaybe False . toMaybe) . unGV <$> functorToIsConList gva -- ?
-        conNameList = constructorNameList proxyA
-        widgetList  = functorDoPerConstructor (mFaSGBuilder proxyA) gva 
-    in internalSum' $ zipWith3 (\isCon name widget -> MDWrapped isCon (name,mf) widget) isConList conNameList widgetList
+        conNameList        = constructorNameList proxyA
+        origAndWidgetList  = functorDoPerConstructor' (mFaSGBuilder proxyA) gva
+        fixOrig = fmap (fromMaybe False . toMaybe) . unGV . fmap isJust
+    in internalSum' $ zipWith (\name (orig,widget) -> MDWrapped (fixOrig orig) (name,mf) widget) conNameList origAndWidgetList
 
 
 --

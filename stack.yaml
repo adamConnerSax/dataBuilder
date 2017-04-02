@@ -8,7 +8,7 @@ resolver: lts-8.2
 packages:
 - location:
     git: https://github.com/adamConnerSax/perConstructor-sop
-    commit: "028d9c9d30223fce5920f06e8867bb0066b7b0fd"
+    commit: "ad12df688a61284ded6e73761176d222f6edab12"
   extra-dep: true
 - '.'
 
