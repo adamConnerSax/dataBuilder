@@ -24,6 +24,7 @@ module DataBuilder.InternalTypes
     FieldName
   , ConName
   , MDWrapped(..)
+  , SimpleMDWrapped(..)
   , Validator
   , Validatable(..)
   , MaybeLike(..)
@@ -31,17 +32,22 @@ module DataBuilder.InternalTypes
   , FGV(..)
   , fToFGV
   , Buildable(..)
+  , SimpleBuildable(..)
   , Builder(..)
+  , SimpleBuilder(..)
   , buildA
   , GBuilder(..)
+  , SimpleGBuilder(..)
   , buildAFromConList
   , validate
   , validateFGV
   , MonadLike(..)
   , MaybeLike(..)
+  
     -- * Not exposed outside the library
 --  , internalSum
   , internalSum'
+  , internalSumSimple
   ) where
 
 import           Control.Applicative  (Alternative (..))
@@ -166,3 +172,23 @@ internalSum' mdws = case length mdws of
   1 -> value (head mdws)
   _ -> bSum mdws
 
+data SimpleMDWrapped f a = SimpleMDWrapped { simple_hasDefault::Bool, simple_metadata::(ConName,Maybe FieldName), simple_value::f a }
+
+class Applicative f=>SimpleBuildable f where
+  simpleBFail::String -> f a
+  simpleBSum::[SimpleMDWrapped f a] -> f a
+
+class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => SimpleGBuilder f a where
+  gSimpleBuild::SimpleBuildable f=>Maybe FieldName->Maybe a->f a
+
+class SimpleBuildable f => SimpleBuilder f a where
+  simpleBuild::Maybe FieldName -> Maybe a -> f a
+  default simpleBuild::SimpleGBuilder f a=>Maybe FieldName ->Maybe a -> f a
+  simpleBuild = gSimpleBuild
+
+internalSumSimple::SimpleBuildable f=>[SimpleMDWrapped f a]->f a
+internalSumSimple smdws = case length smdws of
+  0 -> simpleBFail "No Constructors in sum (this shouldn't happen!)."
+  1 -> simple_value (head smdws)
+  _ -> simpleBSum smdws
+  

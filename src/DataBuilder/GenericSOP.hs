@@ -30,6 +30,7 @@ module DataBuilder.GenericSOP
        )where
 
 
+import           Control.Monad (join)
 import qualified Data.Map                  as M
 import           Data.Maybe                (isJust,fromMaybe)
 import           Data.Semigroup            (Semigroup)
@@ -67,6 +68,29 @@ instance (MonadLike v, MaybeLike v, GBuilderC f g v a)=>GBuilder f g v a where
         origAndWidgetList  = functorDoPerConstructor' (mFaSGBuilder proxyA) gva
         fixOrig = fmap (fromMaybe False . toMaybe) . unGV . fmap isJust
     in internalSum' $ zipWith (\name (orig,widget) -> MDWrapped (fixOrig orig) (name,mf) widget) conNameList origAndWidgetList
+
+
+type SimpleGBuilderC f a = (SimpleBuildable f, Generic a, HasDatatypeInfo a, All2 (SimpleBuilder f) (Code a))
+
+mFaSGSimpleBuilder::forall f a.(Generic a,HasDatatypeInfo a
+                               , Applicative f
+                               , All2 (SimpleBuilder f) (Code a))
+                  =>Proxy a -> MapFieldsAndSequence (Maybe :.: Maybe) f (Code a) -- POP (Maybe :.: I) xss ->  NP (f :.: NP I) xss
+mFaSGSimpleBuilder proxy popM =
+  let builderC = Proxy :: Proxy (SimpleBuilder f)
+      sListIC = Proxy :: Proxy SListI
+      fix::(Maybe :.: Maybe) x -> Maybe x
+      fix = join . unComp
+  in hcliftA sListIC (Comp . hsequence) . unPOP $ hcliftA2 builderC (\kmfn ima -> simpleBuild (unK kmfn) (fix ima)) (maybeFieldNamePOP proxy) popM
+  
+instance SimpleGBuilderC f a=>SimpleGBuilder f a where
+  gSimpleBuild mf ma = 
+    let proxyA             = Proxy :: Proxy a
+        conNameList        = constructorNameList proxyA
+        origAndWidgetList  = functorDoPerConstructor' (mFaSGSimpleBuilder proxyA) ma
+        fixOrig            = isJust . join
+    in internalSumSimple $ zipWith (\name (orig,widget) -> SimpleMDWrapped (fixOrig orig) (name,mf) widget) conNameList origAndWidgetList
+
 
 
 --
