@@ -6,6 +6,10 @@ resolver: lts-8.2
 
 # Local packages, usually specified by relative directory name
 packages:
+- location:
+    git: https://github.com/adamConnerSax/perConstructor-sop
+    commit: "028d9c9d30223fce5920f06e8867bb0066b7b0fd"
+  extra-dep: true
 - '.'
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)

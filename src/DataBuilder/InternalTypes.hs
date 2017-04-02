@@ -26,6 +26,8 @@ module DataBuilder.InternalTypes
   , MDWrapped(..)
   , Validator
   , Validatable(..)
+  , MaybeLike(..)
+  , GV(..)
   , FGV(..)
   , fToFGV
   , Buildable(..)
@@ -36,6 +38,7 @@ module DataBuilder.InternalTypes
   , validate
   , validateFGV
   , MonadLike(..)
+  , MaybeLike(..)
     -- * Not exposed outside the library
 --  , internalSum
   , internalSum'
@@ -66,12 +69,38 @@ class MonadLike f where
 
 instance MonadLike Identity
 
+class MaybeLike v where
+  absorbMaybe::v (Maybe a) -> v a
+  toMaybe::v a -> Maybe a
+
+
 validate::(Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
 validate f = fmap (joinLike . fmap f) 
 
-
 fmapComposed::(Functor f, Functor g)=>(a->b) -> f (g a)-> f (g b)
 fmapComposed f = getCompose . fmap f . Compose
+
+newtype GV g v a = GV { unGV::g (v a) }
+gToGV::(Functor g, MonadLike g, MonadLike v)=>g a -> GV g v a
+gToGV = GV . fmap pureLike
+
+validateGV::(Functor g, Functor v, MonadLike v)=>Validator v a -> GV g v a -> GV g v a
+validateGV  valA = GV . validate valA . unGV
+
+gvToComposed = Compose . unGV
+composedToGV = GV . getCompose
+
+instance (Functor g, Functor v)=>Functor (GV g v) where
+  fmap f = composedToGV . fmap f . gvToComposed
+
+instance (Applicative g, Applicative v) => Applicative (GV g v) where
+  pure = composedToGV . pure
+  gvF <*> gvA = composedToGV (gvToComposed gvF <*> gvToComposed gvA)
+
+instance (Alternative g, Applicative g, Applicative v) => Alternative (GV g v) where
+  empty = composedToGV empty
+  gvA <|> gvB = composedToGV $ gvToComposed gvA <|> gvToComposed gvB
+
 
 newtype FGV f g v a = FGV { unFGV::f (g (v a)) }
 
@@ -79,8 +108,7 @@ fToFGV::(Functor f, MonadLike v, MonadLike g)=>f a -> FGV f g v a
 fToFGV = FGV . fmap (pureLike . pureLike)
 
 validateFGV::(Functor f, Functor g, Functor v, MonadLike v)=>Validator v a->FGV f g v a->FGV f g v a
-validateFGV va = FGV . fmap (validate va) . unFGV
-
+validateFGV valA = FGV . fmap (validate valA) . unFGV
 
 fgvToComposed = Compose . Compose . unFGV
 composedToFGV = FGV . getCompose . getCompose
@@ -96,13 +124,15 @@ instance (Alternative f, Alternative g, Applicative f, Applicative g, Applicativ
   empty = composedToFGV empty
   fgvA <|> fgvB = composedToFGV $ fgvToComposed fgvA <|> fgvToComposed fgvB 
 
+--
 
-data MDWrapped f g v a = MDWrapped { hasDefault::Bool, metadata::(ConName,Maybe FieldName), value::FGV f g v a }
+data MDWrapped f g v a = MDWrapped { hasDefault::g Bool, metadata::(ConName,Maybe FieldName), value::FGV f g v a }
 
 class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
   bFail::String->FGV f g v a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f g v a]->FGV f g v a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
 
+{-
   bCollapse::g (FGV f g v a)->FGV f g v a  -- being able to do this is crucial to allowing (g a) as input
   default bCollapse::(Traversable g, MonadLike g)=>g (FGV f g v a) -> FGV f g v a
   bCollapse = FGV . fmap joinLike . sequenceA . fmap unFGV
@@ -113,10 +143,10 @@ class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
 
   bCollapseAndSum::g [MDWrapped f g v a] -> FGV f g v a
   bCollapseAndSum = bCollapse . fmap internalSum' 
-
+-}
   
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g v a where
-  gBuildValidated::Buildable f g v=>Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
+  gBuildValidated::Buildable f g v=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
 
 -- this is meant to be overriden for anything with any kind of validation
 -- and needs to be instantiated for any type being built
@@ -126,15 +156,15 @@ class Validatable v a where
   validator = pureLike
 
 class Buildable f g v => Builder f g v a  where
-  buildValidated::Buildable f g v=>Validator v a->Maybe FieldName->Maybe (g a)-> FGV f g v a
-  default buildValidated::(Buildable f g v, GBuilder f g v a)=>Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
-  buildValidated va = gBuildValidated va
+  buildValidated::Buildable f g v=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
+  default buildValidated::(Buildable f g v, GBuilder f g v a)=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
+  buildValidated = gBuildValidated
 
-buildA::(Builder f g v a,MonadLike v,Validatable v a)=>Maybe FieldName->Maybe (g a)-> FGV f g v a
+buildA::(Builder f g v a,{- MonadLike v, -}Validatable v a)=>Maybe FieldName->GV g v a-> FGV f g v a
 buildA = buildValidated validator
 
-buildAFromConList::Buildable f g v=>[Validator v a->Maybe FieldName->Maybe (g a)->g (MDWrapped f g v a)]->Validator v a->Maybe FieldName->Maybe (g a)->FGV f g v a
-buildAFromConList conList va mFN mga  = bCollapseAndSum $ bDistributeList $ fmap (\q->q va mFN mga) conList
+buildAFromConList::Buildable f g v=>[Validator v a->Maybe FieldName->GV g v a->MDWrapped f g v a]->Validator v a->Maybe FieldName->GV g v a->FGV f g v a
+buildAFromConList conList va mFN mga  = internalSum' $ fmap (\q->q va mFN mga) conList
 
 --internalSum::Buildable f g v=>g [MDWrapped f g v a]->FGV f g v a
 --internalSum = bCollapse . fmap internalSum'

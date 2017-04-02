@@ -31,83 +31,62 @@ module DataBuilder.GenericSOP
 
 
 import qualified Data.Map                  as M
-import           Data.Maybe                (fromJust)
+import           Data.Maybe                (isJust,fromMaybe)
 import           Data.Semigroup            (Semigroup)
 import           Generics.SOP              hiding (FieldName, constructorName)
 import           Generics.SOP              as GSOP (Generic, HasDatatypeInfo)
 import           Generics.SOP.TH           (deriveGeneric)
 import qualified GHC.Generics              as GHC
 
---import qualified GHC.TypeLits as TL
---import qualified Data.Singletons as S
-import qualified Data.Dependent.Map        as DM
-import qualified Data.Dependent.Sum        as DS
-import           Data.GADT.Compare         ((:~:) (..), GCompare (..), GEq (..),
-                                            GOrdering (..))
---
+import           Generics.SOP.PerConstructor
+
 import           DataBuilder.InternalTypes
 
 
--- some preliminaries for type-level tags for the constructors of sum types
--- Can we just use NS or NP itself??
--- I don't think so, or at least we don't want to.  We need a type that encodes the set of constructors
--- I think we want to use NP ConstructorInfo xs
+
+type VBuilderC f g v = And (Builder f g v) (Validatable v)
+type GBuilderC f g v a = (Buildable f g v, Generic a, HasDatatypeInfo a, All2 (VBuilderC f g v) (Code a))
 
 
--- no good, I think, because the first parameter is changed by a call to There.
--- That is,
-data NPTag (xs :: [k]) (x :: k) where -- x is in xs
-  Here  :: NPTag (x ': xs) x          -- x begins xs
-  There :: NPTag xs x -> NPTag (y ': xs) x -- given that x is in xs, x is also in (y ': xs)
+functorToIsConList::(GSOP.Generic a, Functor g)=>g a->[g Bool]
+functorToIsConList ga = ((fmap isJust) . unComp) <$> functorToPerConstructorList id ga
 
 
--- This was tricky!
--- It inserts into a DMap on a shorter type-list, np'
--- The DMap from the shorter list (np') has proofs that the various x are in the shorter list
--- adding a "There" proves that x's are in the list which is one element longer, thus making the
--- new DMap have proofs on the correct list
-npToDMap::NP f xs -> DM.DMap (NPTag xs) f
-npToDMap Nil = DM.empty
-npToDMap (fx :* np') = DM.insert Here fx $ DM.mapKeysMonotonic There $ npToDMap np'
-
--- Two elt NS
--- Z (I 'x') :: NS I '[Char, Bool] --> (There Here :=> I 'x')
--- S (Z (I True) :: NS I '[Char, Bool] --> (Here :=> I True)
-
-nsToDSum::NS f xs -> DS.DSum (NPTag xs) f
-nsToDSum ns = go Here ns where
-  move::DSum (NPTag xs) f -> DSum (NPTag (x ': xs)) f
-  move (tag DS.:=> fx) = ((There tag) DS.:=> fx)
-  go::NPTag xs x -> NS f xs -> DS.DSum (NPTag xs) f
-  go tag (Z fx) = (tag DS.:=> fx)
-  go tag (S ns) = move $ go (There tag) ns
-
-instance GEq (NPTag xs) where
-  geq Here      Here      = Just Refl
-  geq (There x) (There y) = geq x y
-  geq _         _         = Nothing
+--  buildValidated::Buildable f g v=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
+--  each has buildA::Maybe FieldName->GV g v a->FGV f g v a
 
 
-instance All2 (Compose Eq FieldInfo) xss=> DS.EqTag (NPTag xss) ConstructorInfo where
-  eqTagged Here      Here      = (==)
+mFaSGBuilder::forall f g v a.(Generic a,HasDatatypeInfo a
+                             , Applicative f
+                             , Applicative g
+                             , Applicative v
+                             , All2 (VBuilderC f g v) (Code a),MaybeLike v)
+  =>Proxy a -> MapFieldsAndSequence (GV g v :.: Maybe) (FGV f g v) (Code a) -- POP GV xss ->  NP (FGV :.: NP I) xss
+mFaSGBuilder proxy popGVM =
+  let vbuilderC = Proxy :: Proxy (VBuilderC f g v)
+      sListIC = Proxy :: Proxy SListI
+      f::SListI xs=>ConstructorInfo xs -> NP (K (Maybe FieldName)) xs
+      f ci = case ci of
+        Record _ npfi -> hmap (\(FieldInfo name) -> K (Just name)) npfi
+        _             -> hpure (K Nothing)
+      popMFNs::POP (K (Maybe FieldName)) (Code a)  
+      popMFNs = POP . hcliftA sListIC f . constructorInfo $ datatypeInfo proxy -- POP (K (Maybe FieldName)) (Code a)
+      fixGVM::Functor g=>(GV g v :.: Maybe) x -> GV g v x
+      fixGVM = GV . fmap absorbMaybe . unGV . unComp
+  in hcliftA sListIC (Comp . hsequence) . unPOP $ hcliftA2 vbuilderC (\kmfn gvma -> buildA (unK kmfn) (fixGVM gvma)) popMFNs popGVM
+  
 
-instance GCompare (NPTag xs) where
-  gcompare Here Here = GEQ
-  gcompare Here (There _) = GLT
-  gcompare (There _) Here = GGT
-  gcompare (There x) (There y) = gcompare x y
-
-instance (All2 (Compose Eq FieldInfo) xss
-         ,All2 (Compose Ord FieldInfo) xss)=>DS.OrdTag (NPTag xss) ConstructorInfo where
-  compareTagged Here Here = compare
+instance (MonadLike v, MaybeLike v, GBuilderC f g v a)=>GBuilder f g v a where
+  gBuildValidated valA mf gva = 
+    let proxyA = Proxy :: Proxy a
+        isConList   = fmap (fromMaybe False . toMaybe) . unGV <$> functorToIsConList gva -- ?
+        conNameList = constructorNameList proxyA
+        widgetList  = functorDoPerConstructor (mFaSGBuilder proxyA) gva 
+    in internalSum' $ zipWith3 (\isCon name widget -> MDWrapped isCon (name,mf) widget) isConList conNameList widgetList
 
 
-ciDMap::forall a xss.(HasDatatypeInfo a, xss ~ Code a)=>a->DM.DMap (NPTag xss) ConstructorInfo
-ciDMap a =
-  let ciInfo = constructorInfo $ datatypeInfo (Proxy :: Proxy a) -- NP ConstructorInfo xss
-  in npToDMap ciInfo
-
-
+--
+{-
 ci2name::ConstructorInfo xs-> ConName
 ci2name (Constructor cn) = cn
 ci2name (Infix cn _ _) = cn
@@ -237,3 +216,4 @@ constructorName' a =
       getConName::ConstructorInfo xs->NP I xs->K ConName xs
       getConName ci _ = K $ ci2name ci
   in hcollapse $ hliftA2 getConName cs (unSOP $ from a)
+-}
