@@ -73,6 +73,10 @@ class MaybeLike v where
   absorbMaybe::v (Maybe a) -> v a
   toMaybe::v a -> Maybe a
 
+instance MaybeLike Maybe where
+  absorbMaybe = join
+  toMaybe = id
+
 
 validate::(Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
 validate f = fmap (joinLike . fmap f) 
@@ -131,19 +135,6 @@ data MDWrapped f g v a = MDWrapped { hasDefault::g Bool, metadata::(ConName,Mayb
 class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
   bFail::String->FGV f g v a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f g v a]->FGV f g v a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
-
-{-
-  bCollapse::g (FGV f g v a)->FGV f g v a  -- being able to do this is crucial to allowing (g a) as input
-  default bCollapse::(Traversable g, MonadLike g)=>g (FGV f g v a) -> FGV f g v a
-  bCollapse = FGV . fmap joinLike . sequenceA . fmap unFGV
-
-  bDistributeList::[g (MDWrapped f g v a)] -> g [MDWrapped f g v a] -- in order to hand-write constructors. Might be better ways than sequenceA
-  default bDistributeList::Traversable g=>[g (MDWrapped f g v a)] -> g [MDWrapped f g v a]
-  bDistributeList = sequenceA
-
-  bCollapseAndSum::g [MDWrapped f g v a] -> FGV f g v a
-  bCollapseAndSum = bCollapse . fmap internalSum' 
--}
   
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g v a where
   gBuildValidated::Buildable f g v=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
@@ -174,3 +165,4 @@ internalSum' mdws = case length mdws of
   0 -> bFail "No Constructors in sum (this shouldn't happen!)."
   1 -> value (head mdws)
   _ -> bSum mdws
+

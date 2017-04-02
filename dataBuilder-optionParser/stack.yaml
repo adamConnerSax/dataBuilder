@@ -36,6 +36,11 @@ resolver: lts-8.2
 # non-dependency (i.e. a user package), and its test suites and benchmarks
 # will not be run. This is useful for tweaking upstream packages.
 packages:
+packages:
+- location:
+    git: https://github.com/adamConnerSax/perConstructor-sop
+    commit: "ad12df688a61284ded6e73761176d222f6edab12"
+  extra-dep: true
 - '..'
 - '.'
 # Dependency packages to be pulled from upstream that are not in the resolver

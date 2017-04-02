@@ -5,6 +5,7 @@ module DataBuilder.Types
        , Validator
        , Validatable(..)
        , FGV(..)
+       , GV(..)
        , MDWrapped(..)
        , Buildable(..)
        , Builder(..)

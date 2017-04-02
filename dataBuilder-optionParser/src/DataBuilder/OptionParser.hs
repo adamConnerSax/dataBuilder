@@ -12,10 +12,10 @@ module DataBuilder.OptionParser
        (
          makeOAParser
        , ParserBuilder(..)
---       , deriveOABuilder
        , Identity
        ) where
 
+import           Control.Monad         (join)
 import           Data.Char             (toLower)
 import           Data.Functor.Identity (Identity (..))
 import           Data.Maybe            (fromJust)
@@ -27,40 +27,41 @@ import           DataBuilder.Types
 import           Language.Haskell.TH
 import           Options.Applicative
 
-instance Validatable Identity a
+instance Validatable Maybe a
+instance MonadLike Maybe
 
-type DBOAParser = FGV Parser Identity Identity
+type DBOAParser = FGV Parser Identity Maybe
 
-type MDWrappedOA a = MDWrapped Parser Identity Identity a
+type MDWrappedOA a = MDWrapped Parser Identity Maybe a
 
-collapse::DBOAParser a->Parser a
-collapse = fmap runIdentity . fmap runIdentity . unFGV
+collapse::DBOAParser a->Parser (Maybe a)
+collapse = fmap runIdentity . unFGV
 
-type OABuilderC a = Builder Parser Identity Identity a
+type OABuilderC a = Builder Parser Identity Maybe a
 
 class ParserBuilder a where
   buildParser::Maybe FieldName->Maybe a->DBOAParser a
-  default buildParser::(GBuilder Parser Identity Identity a, Validatable Identity a)=>Maybe FieldName->Maybe a->DBOAParser a
-  buildParser mFN = gBuildValidated validator mFN . fmap Identity
+  default buildParser::(GBuilder Parser Identity Maybe a, Validatable Maybe a)=>Maybe FieldName->Maybe a->DBOAParser a
+  buildParser mFN = gBuildValidated validator mFN . GV . Identity
 
-instance ParserBuilder a=>Builder Parser Identity Identity a where
-  buildValidated _ mf = buildParser mf . fmap runIdentity 
+instance ParserBuilder a=>Builder Parser Identity Maybe a where
+  buildValidated _ mf = buildParser mf . runIdentity . unGV 
   
-makeOAParser::OABuilderC a=>Maybe a->Parser a
-makeOAParser = collapse . buildA Nothing . fmap pure
+makeOAParser::OABuilderC a=>Maybe a->Parser (Maybe a)
+makeOAParser = collapse . buildA Nothing . GV . Identity
 
-instance Buildable Parser Identity Identity where
+instance Buildable Parser Identity Maybe where
   bFail msg = fToFGV $ abortOption (ErrorMsg $ msg) mempty <*> option disabled mempty
   bSum = sumToCommand
-  bCollapse = runIdentity
-  bDistributeList = Identity . fmap runIdentity
+--  bCollapse = runIdentity
+--  bDistributeList = Identity . fmap runIdentity
   
 
 -- derive a command parser from a sum-type
 sumToCommand::[MDWrappedOA a]->DBOAParser a
 sumToCommand mdws =
   let makeCommand mdw = command (fst . metadata $ mdw) (info (collapse $ DataBuilder.Types.value mdw) mempty)
-  in fToFGV $ subparser $ mconcat (map makeCommand mdws)
+  in FGV . fmap Identity . subparser $ mconcat (map makeCommand mdws)
 
 --shortAndLong::HasName f=>String->Mod f a
 shortAndLong x = long x <> short (head x)
@@ -86,7 +87,7 @@ instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>ParserBuilder e where
     optDesc = maybe mempty help mf
 
 instance {-# OVERLAPPABLE #-} ParserBuilder a=>ParserBuilder (Maybe a) where
-  buildParser mf mmA = fToFGV . optional . collapse $ maybe (buildParser mf Nothing) (buildParser mf) mmA
+  buildParser mf mmA = {- FGV . fmap Identity -} fToFGV . optional . collapse $ maybe (buildParser mf Nothing) (buildParser mf) mmA
 
 
 {-
