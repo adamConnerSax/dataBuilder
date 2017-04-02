@@ -27,48 +27,45 @@ import           DataBuilder.Types
 import           Language.Haskell.TH
 import           Options.Applicative
 
-instance Validatable Maybe a
-instance MonadLike Maybe
+--instance Validatable Maybe a
+--instance MonadLike Maybe
 
-type DBOAParser = FGV Parser Identity Maybe
+--type DBOAParser = FGV Parser Identity Maybe
 
-type MDWrappedOA a = MDWrapped Parser Identity Maybe a
+type MDWrappedOA a = SimpleMDWrapped Parser a
 
-collapse::DBOAParser a->Parser (Maybe a)
-collapse = fmap runIdentity . unFGV
-
-type OABuilderC a = Builder Parser Identity Maybe a
+type OABuilderC a = SimpleBuilder Parser a
 
 class ParserBuilder a where
-  buildParser::Maybe FieldName->Maybe a->DBOAParser a
-  default buildParser::(GBuilder Parser Identity Maybe a, Validatable Maybe a)=>Maybe FieldName->Maybe a->DBOAParser a
-  buildParser mFN = gBuildValidated validator mFN . GV . Identity
+  buildParser::Maybe FieldName->Maybe a->Parser a
+  default buildParser::SimpleGBuilder Parser a=>Maybe FieldName->Maybe a->Parser a
+  buildParser = gSimpleBuild 
 
-instance ParserBuilder a=>Builder Parser Identity Maybe a where
-  buildValidated _ mf = buildParser mf . runIdentity . unGV 
+instance ParserBuilder a=>SimpleBuilder Parser a where
+  simpleBuild = buildParser
   
-makeOAParser::OABuilderC a=>Maybe a->Parser (Maybe a)
-makeOAParser = collapse . buildA Nothing . GV . Identity
+makeOAParser::OABuilderC a=>Maybe a->Parser a
+makeOAParser = simpleBuild Nothing
 
-instance Buildable Parser Identity Maybe where
-  bFail msg = fToFGV $ abortOption (ErrorMsg $ msg) mempty <*> option disabled mempty
-  bSum = sumToCommand
+instance SimpleBuildable Parser where
+  simpleBFail msg = abortOption (ErrorMsg $ msg) mempty <*> option disabled mempty
+  simpleBSum = sumToCommand
 --  bCollapse = runIdentity
 --  bDistributeList = Identity . fmap runIdentity
   
 
 -- derive a command parser from a sum-type
-sumToCommand::[MDWrappedOA a]->DBOAParser a
+sumToCommand::[MDWrappedOA a]->Parser a
 sumToCommand mdws =
-  let makeCommand mdw = command (fst . metadata $ mdw) (info (collapse $ DataBuilder.Types.value mdw) mempty)
-  in FGV . fmap Identity . subparser $ mconcat (map makeCommand mdws)
+  let makeCommand mdw = command (fst . simple_metadata $ mdw) (info (simple_value mdw) mempty)
+  in subparser $ mconcat (map makeCommand mdws)
 
 --shortAndLong::HasName f=>String->Mod f a
 shortAndLong x = long x <> short (head x)
 
-parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Maybe FieldName->Maybe a->DBOAParser a
+parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Maybe FieldName->Maybe a->Parser a
 parseReadable reader mHelp mf ma =
-  fToFGV $ case mf of
+  case mf of
     Nothing->argument reader ((maybe mempty Options.Applicative.value ma) <> (maybe mempty help mHelp))
     Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> (maybe mempty help mHelp))
 
@@ -82,12 +79,12 @@ instance ParserBuilder String where
   buildParser = parseReadable str (Just "String")
 
 instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>ParserBuilder e where
-  buildParser mf mE = fToFGV $ foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
+  buildParser mf mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where
     fl = maybe flag' flag mE
     optDesc = maybe mempty help mf
 
 instance {-# OVERLAPPABLE #-} ParserBuilder a=>ParserBuilder (Maybe a) where
-  buildParser mf mmA = {- FGV . fmap Identity -} fToFGV . optional . collapse $ maybe (buildParser mf Nothing) (buildParser mf) mmA
+  buildParser mf mmA = optional $ maybe (buildParser mf Nothing) (buildParser mf) mmA
 
 
 {-

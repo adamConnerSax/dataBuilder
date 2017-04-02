@@ -7,10 +7,14 @@ module DataBuilder.Types
        , FGV(..)
        , GV(..)
        , MDWrapped(..)
+       , SimpleMDWrapped(..)
        , Buildable(..)
+       , SimpleBuildable(..)
        , Builder(..)
+       , SimpleBuilder(..)
        , buildA
        , GBuilder(..)
+       , SimpleGBuilder(..)
        , buildAFromConList
        , validateFGV
        , validate

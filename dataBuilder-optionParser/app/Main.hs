@@ -52,8 +52,8 @@ instance ParserBuilder  ConfigCmd -- uses the generic version via generics-sop. 
 
 main::IO ()
 main = (execParser $ info (helper <*> parser) infoMod) >>= print where
-  parser = makeOAParser (Just $ configDefault) -- supplies defaults for everything
---  parser = makeOAParser (Nothing :: Maybe Config) -- no defaults
+--  parser = makeOAParser (Just $ configDefault) -- supplies defaults for everything
+  parser = makeOAParser (Nothing :: Maybe Config) -- no defaults
 --  parser = makeOAParser (Nothing :: Maybe Int)
   configDefault = Config "Hello" Nothing (Just Verbose) AProcess
   configCmdDefault = ConfigCmd "Hello" Nothing (Just Verbose) AProcess (DoA "fileName.txt")
