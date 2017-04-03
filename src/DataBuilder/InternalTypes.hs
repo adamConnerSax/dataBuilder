@@ -27,7 +27,6 @@ module DataBuilder.InternalTypes
   , SimpleMDWrapped(..)
   , Validator
   , Validatable(..)
-  , MaybeLike(..)
   , GV(..)
   , FGV(..)
   , fToFGV

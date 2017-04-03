@@ -19,6 +19,7 @@ module DataBuilder.Types
        , validateFGV
        , validate
        , MonadLike(..)
+       , MaybeLike(..)
        , fToFGV
        , module Generics.SOP
        ) where
