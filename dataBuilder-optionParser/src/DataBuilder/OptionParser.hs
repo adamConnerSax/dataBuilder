@@ -3,7 +3,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE DefaultSignatures     #-}
@@ -39,10 +38,8 @@ makeOAParser::OABuilderC a=>Maybe a->Parser a
 makeOAParser = simpleBuild Nothing
 
 instance SimpleBuildable Parser where
-  simpleBFail msg = abortOption (ErrorMsg $ msg) mempty <*> option disabled mempty
+  simpleBFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
   simpleBSum = sumToCommand
---  bCollapse = runIdentity
---  bDistributeList = Identity . fmap runIdentity
   
 
 -- derive a command parser from a sum-type
@@ -57,8 +54,8 @@ shortAndLong x = long x <> short (head x)
 parseReadable::(Read a,Show a)=>ReadM a->Maybe String->Maybe FieldName->Maybe a->Parser a
 parseReadable reader mHelp mf ma =
   case mf of
-    Nothing->argument reader ((maybe mempty Options.Applicative.value ma) <> (maybe mempty help mHelp))
-    Just fieldName -> option reader ((maybe mempty Options.Applicative.value ma) <> (shortAndLong fieldName) <> (maybe mempty help mHelp))
+    Nothing->argument reader (maybe mempty Options.Applicative.value ma <> maybe mempty help mHelp)
+    Just fieldName -> option reader (maybe mempty Options.Applicative.value ma <> shortAndLong fieldName <> maybe mempty help mHelp)
 
 instance ParserBuilder Int where
   buildParser = parseReadable auto (Just "Int") 
