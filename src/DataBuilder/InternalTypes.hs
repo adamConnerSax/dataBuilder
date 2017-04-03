@@ -56,7 +56,6 @@ import           Data.Functor.Identity (Identity)
 import           Data.Functor.Compose (Compose (..))
 import           Data.Maybe           (isJust)
 import           Data.Semigroup       (Semigroup)
-import           Data.Validation      (AccValidation (..))
 import qualified Generics.SOP         as GSOP
 
 type FieldName = String

@@ -1,17 +1,15 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TemplateHaskell       #-}
 
 module Main where
 
-import           Data.Functor.Identity  (Identity)
 import           Data.Monoid            ((<>))
 import           Data.Text              (Text)
-import           DataBuilder.GenericSOP
-import           DataBuilder.TH         (deriveBuilder)
-import           DataBuilder.Types      (Builder)
+
 import qualified GHC.Generics           as GHCG
+
 import           Options.Applicative
+
 import           DataBuilder.OptionParser
 
 data Mode = Verbose | Silent deriving (Show,Enum,Bounded,GHCG.Generic)
@@ -37,17 +35,11 @@ instance ParserBuilder Commands -- uses the generic version via generics-sop.  R
 
 data ConfigCmd = ConfigCmd {inputC :: String, outputC :: Maybe String, modeC  :: Maybe Mode, processC :: Process, command :: Commands } deriving (Show,GHCG.Generic)
 
---data Config = Config {input :: String, output :: Maybe String, mode  :: Maybe Mode, process :: Process, cmd :: Commands  } deriving (Show,GHCG.Generic)
---deriveBuilder ''Parser ''Commands
-
 
 
 instance Generic ConfigCmd
 instance HasDatatypeInfo ConfigCmd
 instance ParserBuilder  ConfigCmd -- uses the generic version via generics-sop.  Requires SOP.Generic, SOP.HasDatatypeInfo
-
-
---deriveOABuilder ''Config --uses TH to build the instance.  Then you do not need the Generic or HasDatatypeInfo instances
 
 
 main::IO ()

@@ -20,6 +20,8 @@ module DataBuilder.Types
        , validate
        , MonadLike(..)
        , fToFGV
+       , module Generics.SOP
        ) where
 
 import           DataBuilder.InternalTypes
+import           Generics.SOP (Generic,HasDatatypeInfo)
