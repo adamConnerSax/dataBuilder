@@ -37,7 +37,7 @@ module DataBuilder.InternalTypes
   , buildA
   , GBuilder(..)
   , SimpleGBuilder(..)
-  , buildAFromConList
+--  , buildAFromConList
   , validate
   , validateFGV
   , MonadLike(..)
@@ -45,7 +45,7 @@ module DataBuilder.InternalTypes
   
     -- * Not exposed outside the library
 --  , internalSum
-  , internalSum'
+  , internalSum
   , internalSumSimple
   ) where
 
@@ -158,14 +158,14 @@ class Buildable f g v => Builder f g v a  where
 buildA::(Builder f g v a, Validatable v a)=>Maybe FieldName->GV g v a-> FGV f g v a
 buildA = buildValidated validator
 
-buildAFromConList::Buildable f g v=>[Validator v a->Maybe FieldName->GV g v a->MDWrapped f g v a]->Validator v a->Maybe FieldName->GV g v a->FGV f g v a
-buildAFromConList conList va mFN mga  = internalSum' $ fmap (\q->q va mFN mga) conList
+--buildAFromConList::Buildable f g v=>[Validator v a->Maybe FieldName->GV g v a->MDWrapped f g v a]->Validator v a->Maybe FieldName->GV g v a->FGV f g v a
+--buildAFromConList conList va mFN mga  = internalSum' $ fmap (\q->q va mFN mga) conList
 
 --internalSum::Buildable f g v=>g [MDWrapped f g v a]->FGV f g v a
 --internalSum = bCollapse . fmap internalSum'
 
-internalSum'::Buildable f g v=>[MDWrapped f g v a]->FGV f g v a
-internalSum' mdws = case length mdws of
+internalSum::Buildable f g v=>[MDWrapped f g v a]->FGV f g v a
+internalSum mdws = case length mdws of
   0 -> bFail "No Constructors in sum (this shouldn't happen!)."
   1 -> value (head mdws)
   _ -> bSum mdws

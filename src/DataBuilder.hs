@@ -28,9 +28,11 @@ module DataBuilder
          module DataBuilder.Types
 --       , module DataBuilder.TH
        , module DataBuilder.GenericSOP
+       , module DataBuilder.InternalTypes
        )where
 
 
 import DataBuilder.Types
 --import DataBuilder.TH
 import DataBuilder.GenericSOP
+import DataBuilder.InternalTypes (buildA,validateFGV,validate,fToFGV)

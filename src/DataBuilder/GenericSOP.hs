@@ -73,7 +73,7 @@ buildMDWrappedList mf gva =
   in zipWith (\name (orig,widget) -> MDWrapped (fixOrig orig) (name,mf) widget) conNameList origAndWidgetList
 
 instance (MonadLike v, MaybeLike v, GBuilderC f g v a)=>GBuilder f g v a where
-  gBuildValidated valA mf gva = validateFGV valA . internalSum' $ buildMDWrappedList mf gva 
+  gBuildValidated valA mf gva = validateFGV valA . internalSum $ buildMDWrappedList mf gva 
 
 
 type SimpleGBuilderC f a = (SimpleBuildable f, Generic a, HasDatatypeInfo a, All2 (SimpleBuilder f) (Code a))
