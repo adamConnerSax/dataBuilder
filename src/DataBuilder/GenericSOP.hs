@@ -27,6 +27,10 @@ module DataBuilder.GenericSOP
        (
          module GSOP --re-export the Generics.SOP classes for deriving
        , module Generics.SOP.TH
+       , All
+       , All2
+       , And
+       , Code
        , buildMDWrappedList
        )where
 
