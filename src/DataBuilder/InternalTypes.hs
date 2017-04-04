@@ -155,7 +155,7 @@ class Buildable f g v => Builder f g v a  where
   default buildValidated::(Buildable f g v, GBuilder f g v a)=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
   buildValidated = gBuildValidated
 
-buildA::(Builder f g v a,{- MonadLike v, -}Validatable v a)=>Maybe FieldName->GV g v a-> FGV f g v a
+buildA::(Builder f g v a, Validatable v a)=>Maybe FieldName->GV g v a-> FGV f g v a
 buildA = buildValidated validator
 
 buildAFromConList::Buildable f g v=>[Validator v a->Maybe FieldName->GV g v a->MDWrapped f g v a]->Validator v a->Maybe FieldName->GV g v a->FGV f g v a

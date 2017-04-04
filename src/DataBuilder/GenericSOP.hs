@@ -27,6 +27,7 @@ module DataBuilder.GenericSOP
        (
          module GSOP --re-export the Generics.SOP classes for deriving
        , module Generics.SOP.TH
+       , buildMDWrappedList
        )where
 
 
@@ -59,14 +60,20 @@ mFaSGBuilder proxy popGVM =
       fixGVM::Functor g=>(GV g v :.: Maybe) x -> GV g v x
       fixGVM = GV . fmap absorbMaybe . unGV . unComp
   in hcliftA sListIC (Comp . hsequence) . unPOP $ hcliftA2 vbuilderC (\kmfn gvma -> buildA (unK kmfn) (fixGVM gvma)) (maybeFieldNamePOP proxy) popGVM
-  
+
+buildMDWrappedList::forall f g v a.(MonadLike v, MaybeLike v, GBuilderC f g v a)
+  => Maybe FieldName
+  -> GV g v a
+  -> [MDWrapped f g v a]
+buildMDWrappedList mf gva = 
+  let proxyA = Proxy :: Proxy a
+      conNameList        = constructorNameList proxyA
+      origAndWidgetList  = functorDoPerConstructor' (mFaSGBuilder proxyA) gva
+      fixOrig = fmap (fromMaybe False . toMaybe) . unGV . fmap isJust
+  in zipWith (\name (orig,widget) -> MDWrapped (fixOrig orig) (name,mf) widget) conNameList origAndWidgetList
+
 instance (MonadLike v, MaybeLike v, GBuilderC f g v a)=>GBuilder f g v a where
-  gBuildValidated valA mf gva = 
-    let proxyA = Proxy :: Proxy a
-        conNameList        = constructorNameList proxyA
-        origAndWidgetList  = functorDoPerConstructor' (mFaSGBuilder proxyA) gva
-        fixOrig = fmap (fromMaybe False . toMaybe) . unGV . fmap isJust
-    in internalSum' $ zipWith (\name (orig,widget) -> MDWrapped (fixOrig orig) (name,mf) widget) conNameList origAndWidgetList
+  gBuildValidated valA mf gva = validateFGV valA . internalSum' $ buildMDWrappedList mf gva 
 
 
 type SimpleGBuilderC f a = (SimpleBuildable f, Generic a, HasDatatypeInfo a, All2 (SimpleBuilder f) (Code a))
