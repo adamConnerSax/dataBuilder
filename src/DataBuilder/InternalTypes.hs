@@ -3,6 +3,9 @@
 {-# LANGUAGE FlexibleContexts        #-}
 {-# LANGUAGE MultiParamTypeClasses   #-}
 {-# LANGUAGE RankNTypes              #-}
+{-# LANGUAGE KindSignatures          #-}
+{-# LANGUAGE DataKinds               #-}
+{-# LANGUAGE TypeOperators           #-}
 #if __GLASGOW_HASKELL__ >= 800
 {-# LANGUAGE UndecidableSuperClasses #-}
 #endif
@@ -36,6 +39,8 @@ module DataBuilder.InternalTypes
   , SimpleBuilder(..)
   , buildA
   , GBuilder(..)
+  , CustomSequenceG
+  , GBuilderCS(..)
   , SimpleGBuilder(..)
 --  , buildAFromConList
   , validate
@@ -56,7 +61,7 @@ import           Data.Functor.Compose (Compose (..))
 import           Data.Maybe           (isJust)
 import           Data.Semigroup       (Semigroup)
 import qualified Generics.SOP         as GSOP
-
+import           Generics.SOP         (NP,(:.:),SListI)
 type FieldName = String
 type ConName = String
 type Validator v a = a -> v a
@@ -142,6 +147,12 @@ class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
   
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g v a where
   gBuildValidated::Buildable f g v=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
+
+type CustomSequenceG g = (forall (xs::[*]) (j:: * -> *).SListI xs=>(NP (g :.: j) xs) -> g (NP j xs))
+
+-- For the case when g has a specific way to sequence rather than using its applicative instance
+class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilderCS f g v a where
+  gBuildValidatedCS::Buildable f g v=>CustomSequenceG g->Validator v a->Maybe FieldName->GV g v a->FGV f g v a
 
 -- this is meant to be overriden for anything with any kind of validation
 -- and needs to be instantiated for any type being built
