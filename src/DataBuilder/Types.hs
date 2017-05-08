@@ -14,6 +14,8 @@ module DataBuilder.Types
        , SimpleBuilder(..)
 --       , buildA
        , GBuilder(..)
+       , CustomSequenceG
+       , GBuilderCS(..)
        , SimpleGBuilder(..)
 --       , buildAFromConList
 --       , validateFGV
