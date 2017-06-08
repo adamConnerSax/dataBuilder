@@ -1,11 +1,11 @@
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DefaultSignatures     #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
-{-# LANGUAGE DefaultSignatures     #-}
 {-# LANGUAGE UndecidableInstances  #-}
 module DataBuilder.OptionParser
        (
@@ -15,13 +15,14 @@ module DataBuilder.OptionParser
        , HasDatatypeInfo
        ) where
 
-import           Data.Char             (toLower)
-import           Data.Maybe            (fromJust)
-import           Data.Monoid           ((<>))
+import           Data.Char              (toLower)
+import           Data.Maybe             (fromJust)
+import           Data.Monoid            ((<>))
+import           DataBuilder.GenericSOP ()
 import           DataBuilder.Types
 import           Options.Applicative
-import           DataBuilder.GenericSOP() -- make generic instances available to importers of this module
 
+import           Data.Text              (Text)
 type MDWrappedOA a = SimpleMDWrapped Parser a
 
 type OABuilderC a = SimpleBuilder Parser a
@@ -29,18 +30,18 @@ type OABuilderC a = SimpleBuilder Parser a
 class ParserBuilder a where
   buildParser::Maybe FieldName->Maybe a->Parser a
   default buildParser::SimpleGBuilder Parser a=>Maybe FieldName->Maybe a->Parser a
-  buildParser = gSimpleBuild 
+  buildParser = gSimpleBuild
 
 instance ParserBuilder a=>SimpleBuilder Parser a where
   simpleBuild = buildParser
-  
+
 makeOAParser::OABuilderC a=>Maybe a->Parser a
 makeOAParser = simpleBuild Nothing
 
 instance SimpleBuildable Parser where
   simpleBFail msg = abortOption (ErrorMsg msg) mempty <*> option disabled mempty
   simpleBSum = sumToCommand
-  
+
 
 -- derive a command parser from a sum-type
 sumToCommand::[MDWrappedOA a]->Parser a
@@ -58,13 +59,17 @@ parseReadable reader mHelp mf ma =
     Just fieldName -> option reader (maybe mempty Options.Applicative.value ma <> shortAndLong fieldName <> maybe mempty help mHelp)
 
 instance ParserBuilder Int where
-  buildParser = parseReadable auto (Just "Int") 
+  buildParser = parseReadable auto (Just "Int")
 
 instance ParserBuilder Double where
   buildParser = parseReadable auto (Just "Double")
 
 instance ParserBuilder String where
   buildParser = parseReadable str (Just "String")
+
+instance ParserBuilder Text where
+  buildParser = parseReadable auto (Just "Text")
+
 
 instance {-# OVERLAPPABLE #-} (Show e,Enum e,Bounded e)=>ParserBuilder e where
   buildParser mf mE = foldl (<|>) empty $ map (\ev->fl ev (optDesc <> (shortAndLong (toLower <$> show ev)))) [minBound :: e..] where

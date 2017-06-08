@@ -20,6 +20,7 @@ library
                      , dataBuilder
                      , template-haskell
                      , validation
+                     , text
                      , optparse-applicative
   default-language:    Haskell2010
 
