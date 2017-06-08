@@ -59,7 +59,7 @@ mFaSGBuilder::forall f g v a.(Generic a,HasDatatypeInfo a
                              , Applicative v
                              , All2 (VBuilderC f g v) (Code a),MaybeLike v)
   =>Proxy a -> MapFieldsAndSequence (GV g v :.: Maybe) (FGV f g v) (Code a) -- POP GV xss ->  NP (FGV :.: NP I) xss
-mFaSGBuilder {- proxy popGVM -} = mFaSGBuilderCustomSequence hsequence
+mFaSGBuilder = mFaSGBuilderCustomSequence hsequence
 
 -- special case when g, our original functor has an optimized sequence
 applyCustomSequenceG::(Applicative f, Applicative v, Functor g, SListI xs)

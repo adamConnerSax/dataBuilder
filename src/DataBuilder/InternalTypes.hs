@@ -1,10 +1,10 @@
 {-# LANGUAGE CPP                     #-}
+{-# LANGUAGE DataKinds               #-}
 {-# LANGUAGE DefaultSignatures       #-}
 {-# LANGUAGE FlexibleContexts        #-}
+{-# LANGUAGE KindSignatures          #-}
 {-# LANGUAGE MultiParamTypeClasses   #-}
 {-# LANGUAGE RankNTypes              #-}
-{-# LANGUAGE KindSignatures          #-}
-{-# LANGUAGE DataKinds               #-}
 {-# LANGUAGE TypeOperators           #-}
 #if __GLASGOW_HASKELL__ >= 800
 {-# LANGUAGE UndecidableSuperClasses #-}
@@ -27,6 +27,7 @@ module DataBuilder.InternalTypes
     FieldName
   , ConName
   , MDWrapped(..)
+  , makeMDWrapped
   , SimpleMDWrapped(..)
   , Validator
   , Validatable(..)
@@ -47,21 +48,21 @@ module DataBuilder.InternalTypes
   , validateFGV
   , MonadLike(..)
   , MaybeLike(..)
-  
+
     -- * Not exposed outside the library
 --  , internalSum
   , internalSum
   , internalSumSimple
   ) where
 
-import           Control.Applicative  (Alternative (..))
-import           Control.Monad        (join)
+import           Control.Applicative   (Alternative (..))
+import           Control.Monad         (join)
+import           Data.Functor.Compose  (Compose (..))
 import           Data.Functor.Identity (Identity)
-import           Data.Functor.Compose (Compose (..))
-import           Data.Maybe           (isJust)
-import           Data.Semigroup       (Semigroup)
-import qualified Generics.SOP         as GSOP
-import           Generics.SOP         (NP,(:.:),SListI)
+import           Data.Maybe            (isJust)
+import           Data.Semigroup        (Semigroup)
+import           Generics.SOP          ((:.:), NP, SListI)
+import qualified Generics.SOP          as GSOP
 type FieldName = String
 type ConName = String
 type Validator v a = a -> v a
@@ -88,7 +89,7 @@ instance MaybeLike Maybe where
 
 
 validate::(Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
-validate f = fmap (joinLike . fmap f) 
+validate f = fmap (joinLike . fmap f)
 
 fmapComposed::(Functor f, Functor g)=>(a->b) -> f (g a)-> f (g b)
 fmapComposed f = getCompose . fmap f . Compose
@@ -130,21 +131,24 @@ instance (Functor f, Functor g, Functor v)=>Functor (FGV f g v) where
   fmap f = composedToFGV . fmap f . fgvToComposed
 
 instance (Applicative f, Applicative g, Applicative v)=>Applicative (FGV f g v) where
-  pure = composedToFGV . pure 
+  pure = composedToFGV . pure
   fgvF <*> fgvA = composedToFGV  (fgvToComposed fgvF <*> fgvToComposed fgvA)
 
 instance (Alternative f, Alternative g, Applicative f, Applicative g, Applicative v)=>Alternative (FGV f g v) where
   empty = composedToFGV empty
-  fgvA <|> fgvB = composedToFGV $ fgvToComposed fgvA <|> fgvToComposed fgvB 
+  fgvA <|> fgvB = composedToFGV $ fgvToComposed fgvA <|> fgvToComposed fgvB
 
 --
-
 data MDWrapped f g v a = MDWrapped { hasDefault::g Bool, metadata::(ConName,Maybe FieldName), value::FGV f g v a }
+
+makeMDWrapped :: Functor g => Maybe FieldName -> (a -> Bool) -> (g a -> FGV f g v a) -> ConName -> g a -> MDWrapped f g v a
+makeMDWrapped mFN isThis valueThis name ga = MDWrapped (isThis <$> ga) (name, mFN) (valueThis ga)
+
 
 class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
   bFail::String->FGV f g v a -- if there's a graceful way to handle errors...
   bSum::[MDWrapped f g v a]->FGV f g v a -- used to decide how to represent a sum.  E.g., chooser in an HTML form
-  
+
 class (GSOP.Generic a, GSOP.HasDatatypeInfo a) => GBuilder f g v a where
   gBuildValidated::Buildable f g v=>Validator v a->Maybe FieldName->GV g v a->FGV f g v a
 
@@ -200,4 +204,4 @@ internalSumSimple smdws = case length smdws of
   0 -> simpleBFail "No Constructors in sum (this shouldn't happen!)."
   1 -> simple_value (head smdws)
   _ -> simpleBSum smdws
-  
+
