@@ -7,6 +7,7 @@ module DataBuilder.Types
        , FGV(..)
        , GV(..)
        , MDWrapped(..)
+       , makeMDWrapped
        , SimpleMDWrapped(..)
        , Buildable(..)
        , SimpleBuildable(..)
@@ -27,4 +28,4 @@ module DataBuilder.Types
        ) where
 
 import           DataBuilder.InternalTypes
-import           Generics.SOP (Generic,HasDatatypeInfo)
+import           Generics.SOP              (Generic, HasDatatypeInfo)
