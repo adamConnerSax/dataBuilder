@@ -59,7 +59,7 @@ import           Control.Applicative   (Alternative (..))
 import           Control.Monad         (join)
 import           Data.Functor.Compose  (Compose (..))
 import           Data.Functor.Identity (Identity)
-import           Data.Maybe            (isJust)
+import           Data.Maybe            (fromMaybe, isJust)
 import           Data.Semigroup        (Semigroup)
 import           Generics.SOP          ((:.:), NP, SListI)
 import qualified Generics.SOP          as GSOP
@@ -70,35 +70,34 @@ type Validator v a = a -> v a
 
 {- NB: these look monadish but f may not be a monad but have reasonable definitions of these, e.g., AccValidate -}
 class MonadLike f where
-  pureLike::a -> f a
+  pureLike :: a -> f a
   default pureLike::Applicative f=>a -> f a
   pureLike = pure
-  joinLike::f (f a) -> f a
+  joinLike :: f (f a) -> f a
   default joinLike::Monad f=>f (f a) -> f a
   joinLike = join
 
 instance MonadLike Identity
 
 class MaybeLike v where
-  absorbMaybe::v (Maybe a) -> v a
-  toMaybe::v a -> Maybe a
+  absorbMaybe :: v (Maybe a) -> v a
+  toMaybe :: v a -> Maybe a
 
 instance MaybeLike Maybe where
   absorbMaybe = join
   toMaybe = id
 
-
-validate::(Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
+validate :: (Functor g, Functor v, MonadLike v)=>Validator v a->g (v a)->g (v a)
 validate f = fmap (joinLike . fmap f)
 
-fmapComposed::(Functor f, Functor g)=>(a->b) -> f (g a)-> f (g b)
+fmapComposed :: (Functor f, Functor g)=>(a->b) -> f (g a)-> f (g b)
 fmapComposed f = getCompose . fmap f . Compose
 
 newtype GV g v a = GV { unGV::g (v a) }
-gToGV::(Functor g, MonadLike g, MonadLike v)=>g a -> GV g v a
+gToGV :: (Functor g, MonadLike g, MonadLike v)=>g a -> GV g v a
 gToGV = GV . fmap pureLike
 
-validateGV::(Functor g, Functor v, MonadLike v)=>Validator v a -> GV g v a -> GV g v a
+validateGV :: (Functor g, Functor v, MonadLike v)=>Validator v a -> GV g v a -> GV g v a
 validateGV  valA = GV . validate valA . unGV
 
 gvToComposed = Compose . unGV
@@ -118,10 +117,10 @@ instance (Alternative g, Applicative g, Applicative v) => Alternative (GV g v) w
 
 newtype FGV f g v a = FGV { unFGV::f (g (v a)) }
 
-fToFGV::(Functor f, MonadLike v, MonadLike g)=>f a -> FGV f g v a
+fToFGV :: (Functor f, MonadLike v, MonadLike g)=>f a -> FGV f g v a
 fToFGV = FGV . fmap (pureLike . pureLike)
 
-validateFGV::(Functor f, Functor g, Functor v, MonadLike v)=>Validator v a->FGV f g v a->FGV f g v a
+validateFGV :: (Functor f, Functor g, Functor v, MonadLike v)=>Validator v a->FGV f g v a->FGV f g v a
 validateFGV valA = FGV . fmap (validate valA) . unFGV
 
 fgvToComposed = Compose . Compose . unFGV
@@ -139,10 +138,12 @@ instance (Alternative f, Alternative g, Applicative f, Applicative g, Applicativ
   fgvA <|> fgvB = composedToFGV $ fgvToComposed fgvA <|> fgvToComposed fgvB
 
 --
-data MDWrapped f g v a = MDWrapped { hasDefault::g Bool, metadata::(ConName,Maybe FieldName), value::FGV f g v a }
+data MDWrapped f g v a = MDWrapped { hasDefault :: g Bool, metadata::(ConName,Maybe FieldName), value :: FGV f g v a }
 
-makeMDWrapped :: Functor g => Maybe FieldName -> (a -> Bool) -> (g a -> FGV f g v a) -> ConName -> g a -> MDWrapped f g v a
-makeMDWrapped mFN isThis valueThis name ga = MDWrapped (isThis <$> ga) (name, mFN) (valueThis ga)
+makeMDWrapped :: (Functor v, MaybeLike v, Functor g) => Maybe FieldName -> (a -> Bool) -> (GV g v a -> FGV f g v a) -> ConName -> GV g v a -> MDWrapped f g v a
+makeMDWrapped mFN isThis valueThis name gva =
+  let isThisGV = fmap (fromMaybe False . toMaybe) . unGV . fmap isThis
+  in MDWrapped (isThisGV gva) (name, mFN) (valueThis gva)
 
 
 class (Applicative f, Applicative g, Applicative v)=>Buildable f g v  where
