@@ -10,6 +10,7 @@
 module DataBuilder.OptionParser
        (
          makeOAParser
+       , parseReadable
        , ParserBuilder(..)
        , Generic
        , HasDatatypeInfo

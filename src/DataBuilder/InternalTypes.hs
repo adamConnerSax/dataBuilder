@@ -138,7 +138,7 @@ instance (Alternative f, Alternative g, Applicative f, Applicative g, Applicativ
   fgvA <|> fgvB = composedToFGV $ fgvToComposed fgvA <|> fgvToComposed fgvB
 
 --
-data MDWrapped f g v a = MDWrapped { hasDefault :: g Bool, metadata::(ConName,Maybe FieldName), value :: FGV f g v a }
+data MDWrapped f g v a = MDWrapped { hasDefault :: g Bool, metadata::(ConName, Maybe FieldName), value :: FGV f g v a }
 
 makeMDWrapped :: (Functor v, MaybeLike v, Functor g) => Maybe FieldName -> (a -> Bool) -> (GV g v a -> FGV f g v a) -> ConName -> GV g v a -> MDWrapped f g v a
 makeMDWrapped mFN isThis valueThis name gva =
