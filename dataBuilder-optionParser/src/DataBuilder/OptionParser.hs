@@ -14,6 +14,7 @@ module DataBuilder.OptionParser
        , enumAsExclusiveFlags
        , parseArgumentsToList
        , OADefault (OADefault)
+       , parseReadable
        , ParserBuilder(..)
        , Generic
        , HasDatatypeInfo
@@ -35,7 +36,7 @@ type MDWrappedOA a = SimpleMDWrapped Parser a
 
 data OADefault = OADefault
 
-type OABuilderC r a = (SimpleBuilder r Parser a)
+type OABuilderC r a = SimpleBuilder r Parser a
 
 class ParserBuilder r a where
   buildParser :: r -> Maybe FieldName -> Maybe a -> Parser a
